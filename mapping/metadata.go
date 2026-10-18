@@ -5,6 +5,7 @@ package mapping
 import (
 	"reflect"
 	"strings"
+	"time"
 
 	"github.com/smatify/smorm/internal/entity"
 	"github.com/smatify/smorm/types"
@@ -234,3 +235,12 @@ type CollectionField interface{ CollectionElem() reflect.Type }
 // RefField is implemented by single reference containers such as
 // smorm.Ref[T]; RefElem returns T.
 type RefField interface{ RefElem() reflect.Type }
+
+// CreatedToucher is implemented by entities (usually through the Timestamps
+// trait) that record their creation time. The unit of work calls it right
+// before inserting.
+type CreatedToucher interface{ TouchCreated(now time.Time) }
+
+// UpdatedToucher is implemented by entities that record their last update.
+// The unit of work calls it right before updating a changed entity.
+type UpdatedToucher interface{ TouchUpdated(now time.Time) }
