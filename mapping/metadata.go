@@ -5,6 +5,7 @@ package mapping
 import (
 	"reflect"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/smatify/smorm/internal/entity"
@@ -45,9 +46,14 @@ type Entity struct {
 	DoctrineStyle bool
 	HeaderIndex   []int // reflect index of the embedded header
 
-	byName   map[string]*Field
-	byColumn map[string]*Field
-	assocBy  map[string]*Association
+	// Generated reports whether a generated accessor is used (set by Accessor).
+	Generated bool
+
+	byName       map[string]*Field
+	byColumn     map[string]*Field
+	assocBy      map[string]*Association
+	accessorOnce sync.Once
+	accessor     Accessor
 }
 
 // Field returns the field with the Go name, or nil.
@@ -81,19 +87,22 @@ func (e *Entity) index() {
 	e.byName = map[string]*Field{}
 	e.byColumn = map[string]*Field{}
 	e.assocBy = map[string]*Association{}
-	for _, f := range e.Fields {
+	for i, f := range e.Fields {
+		f.Pos = i
 		if f.Name != "" {
 			e.byName[f.Name] = f
 		}
 		e.byColumn[strings.ToLower(f.Column)] = f
 	}
-	for _, a := range e.Assocs {
+	for i, a := range e.Assocs {
+		a.Pos = i
 		e.assocBy[a.Name] = a
 	}
 }
 
 // Field is a mapped column.
 type Field struct {
+	Pos      int    // position in Entity.Fields (accessor index)
 	Name     string // Go field name; empty for join columns without own field
 	Column   string
 	Index    []int        // reflect index path from the entity struct
@@ -187,6 +196,7 @@ type JoinTable struct {
 
 // Association is a relation to another entity.
 type Association struct {
+	Pos           int // position in Entity.Assocs (accessor index)
 	Name          string
 	Kind          AssocKind
 	Index         []int
