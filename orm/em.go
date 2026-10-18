@@ -5,8 +5,10 @@ import (
 	"fmt"
 	"reflect"
 	"time"
+	"weak"
 
 	"github.com/smatify/smorm/dbal"
+	"github.com/smatify/smorm/internal/entity"
 	"github.com/smatify/smorm/mapping"
 )
 
@@ -14,13 +16,15 @@ import (
 // Doctrine's EntityManager it is a unit of work for one request or job and
 // is not safe for concurrent use.
 type EntityManager struct {
-	db       dbal.IDB
-	reg      *mapping.Registry
-	now      func() time.Time
-	identity map[*mapping.Entity]map[any]*entry
-	tracked  []*entry // insertion ordered; may contain detached entries until compacted
-	closed   bool
-	events   *EventManager
+	db        dbal.IDB
+	reg       *mapping.Registry
+	now       func() time.Time
+	identity  map[*mapping.Entity]map[any]*entry
+	tracked   []*entry // insertion ordered; may contain detached entries until compacted
+	closed    bool
+	events    *EventManager
+	ctx       context.Context
+	batchSize int
 }
 
 // Option configures an EntityManager.
@@ -34,7 +38,8 @@ func WithClock(now func() time.Time) Option { return func(em *EntityManager) { e
 
 // New returns an entity manager working on db (a *dbal.DB, *dbal.Conn or *dbal.Tx).
 func New(db dbal.IDB, opts ...Option) *EntityManager {
-	em := &EntityManager{db: db, reg: mapping.Default, now: time.Now, identity: map[*mapping.Entity]map[any]*entry{}, events: NewEventManager()}
+	em := &EntityManager{db: db, reg: mapping.Default, now: time.Now, identity: map[*mapping.Entity]map[any]*entry{}, events: NewEventManager(),
+		ctx: context.Background(), batchSize: DefaultBatchSize}
 	for _, o := range opts {
 		o(em)
 	}
@@ -65,15 +70,15 @@ func (em *EntityManager) meta(ptr any) (*mapping.Entity, error) {
 // entryOf returns the state of ptr in this entity manager, or nil if unknown.
 func (em *EntityManager) entryOf(meta *mapping.Entity, ptr any) *entry {
 	h := meta.Accessor().Header(ptr)
-	if e, ok := h.State().(*entry); ok && e.em == em {
+	if e, ok := entity.State(h).(*entry); ok && e.manager() == em {
 		return e
 	}
 	return nil
 }
 
 func (em *EntityManager) attach(meta *mapping.Entity, ptr any, state State) *entry {
-	e := &entry{em: em, meta: meta, ptr: ptr, state: state, initialized: true}
-	meta.Accessor().Header(ptr).SetState(e)
+	e := &entry{em: weak.Make(em), meta: meta, ptr: ptr, state: state, initialized: true}
+	entity.SetState(meta.Accessor().Header(ptr), e)
 	em.tracked = append(em.tracked, e)
 	return e
 }
@@ -108,7 +113,7 @@ func (em *EntityManager) State(ptr any) State {
 	if e := em.entryOf(meta, ptr); e != nil {
 		return e.state
 	}
-	if h, ok := meta.Accessor().Header(ptr).State().(*entry); ok && h.state != StateNew {
+	if h, ok := entity.State(meta.Accessor().Header(ptr)).(*entry); ok && h.state != StateNew {
 		return StateDetached
 	}
 	return StateNew
@@ -287,7 +292,7 @@ func (em *EntityManager) persist(meta *mapping.Entity, ptr any, seen map[any]boo
 	e := em.entryOf(meta, ptr)
 	switch {
 	case e == nil:
-		if h, ok := meta.Accessor().Header(ptr).State().(*entry); ok && h.em != em {
+		if h, ok := entity.State(meta.Accessor().Header(ptr)).(*entry); ok && h.manager() != em {
 			return fmt.Errorf("%s: cannot persist an entity managed by another entity manager; use Merge", meta.Name)
 		}
 		if err := em.scheduleInsert(meta, ptr); err != nil {
@@ -363,7 +368,7 @@ func (em *EntityManager) remove(meta *mapping.Entity, ptr any, seen map[any]bool
 func (em *EntityManager) forget(e *entry) {
 	em.unregister(e)
 	e.state = StateDetached
-	e.meta.Accessor().Header(e.ptr).SetState(nil)
+	entity.SetState(e.meta.Accessor().Header(e.ptr), nil)
 }
 
 // Detach stops tracking ptr (and associations with cascade:detach).

@@ -82,6 +82,9 @@ func fieldValue(ptr any, index []int) reflect.Value {
 func (a *reflectAccessor) New() any { return reflect.New(a.e.GoType).Interface() }
 
 func (a *reflectAccessor) Header(ptr any) *entity.Header {
+	if h := entity.Of(ptr); h != nil {
+		return h
+	}
 	return fieldValue(ptr, a.e.HeaderIndex).Addr().Interface().(*entity.Header)
 }
 

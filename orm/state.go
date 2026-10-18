@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"reflect"
 	"strings"
+	"weak"
 
 	"github.com/smatify/smorm/internal/brand"
 	"github.com/smatify/smorm/mapping"
@@ -51,7 +52,7 @@ func (e *NewEntityFoundError) Error() string {
 
 // entry is the per-instance ORM state stored in the entity header.
 type entry struct {
-	em          *EntityManager
+	em          weak.Pointer[EntityManager] // entities must not keep their manager alive
 	meta        *mapping.Entity
 	ptr         any // pointer to the entity struct
 	state       State
@@ -105,3 +106,6 @@ func isZeroID(v any) bool {
 var brandName = brand.Name
 
 func typeOf[T any]() reflect.Type { return reflect.TypeFor[T]() }
+
+// manager returns the owning entity manager, or nil if it was garbage collected.
+func (e *entry) manager() *EntityManager { return e.em.Value() }
