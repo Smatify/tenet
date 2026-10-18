@@ -23,6 +23,10 @@ type IDB interface {
 	QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row
 	BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error)
 	RunInTx(ctx context.Context, opts *sql.TxOptions, fn func(ctx context.Context, tx *Tx) error) error
+	NewSelect() *SelectQuery
+	NewInsert() *InsertQuery
+	NewUpdate() *UpdateQuery
+	NewDelete() *DeleteQuery
 }
 
 var (
@@ -205,3 +209,39 @@ func runInTx(ctx context.Context, idb IDB, opts *sql.TxOptions, fn func(ctx cont
 	}
 	return tx.Commit()
 }
+
+// NewSelect starts a SELECT query.
+func (db *DB) NewSelect() *SelectQuery { return NewSelect(db) }
+
+// NewInsert starts an INSERT query.
+func (db *DB) NewInsert() *InsertQuery { return NewInsert(db) }
+
+// NewUpdate starts an UPDATE query.
+func (db *DB) NewUpdate() *UpdateQuery { return NewUpdate(db) }
+
+// NewDelete starts a DELETE query.
+func (db *DB) NewDelete() *DeleteQuery { return NewDelete(db) }
+
+// NewSelect starts a SELECT query.
+func (c *Conn) NewSelect() *SelectQuery { return NewSelect(c) }
+
+// NewInsert starts an INSERT query.
+func (c *Conn) NewInsert() *InsertQuery { return NewInsert(c) }
+
+// NewUpdate starts an UPDATE query.
+func (c *Conn) NewUpdate() *UpdateQuery { return NewUpdate(c) }
+
+// NewDelete starts a DELETE query.
+func (c *Conn) NewDelete() *DeleteQuery { return NewDelete(c) }
+
+// NewSelect starts a SELECT query.
+func (tx *Tx) NewSelect() *SelectQuery { return NewSelect(tx) }
+
+// NewInsert starts an INSERT query.
+func (tx *Tx) NewInsert() *InsertQuery { return NewInsert(tx) }
+
+// NewUpdate starts an UPDATE query.
+func (tx *Tx) NewUpdate() *UpdateQuery { return NewUpdate(tx) }
+
+// NewDelete starts a DELETE query.
+func (tx *Tx) NewDelete() *DeleteQuery { return NewDelete(tx) }
