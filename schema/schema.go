@@ -271,6 +271,9 @@ type Column struct {
 	Default       *string // raw SQL expression, nil means no default
 	AutoIncrement bool
 	Comment       string
+	// RawType is a verbatim SQL type used for database types smorm does not
+	// map (filled by introspection). It takes precedence over Type.
+	RawType string
 }
 
 // SetNullable sets nullability and returns c for chaining.

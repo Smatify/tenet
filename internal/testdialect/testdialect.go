@@ -29,3 +29,52 @@ func (d *Dialect) Placeholder(n int) string {
 	}
 	return "?"
 }
+
+// Named is a dialect that reports a real dialect name and mimics its quoting
+// and placeholders, for testing name-dependent code in the core module.
+type Named struct {
+	Dialect
+	N dialect.Name
+}
+
+// Like returns a Named dialect for n with every feature enabled except the
+// ones the real database lacks for statement generation.
+func Like(n dialect.Name) *Named {
+	d := &Named{Dialect: Dialect{F: ^dialect.Feature(0)}, N: n}
+	switch n {
+	case dialect.MSSQL:
+		d.F &^= dialect.FeatureLimitOffset
+	case dialect.MySQL:
+		d.F &^= dialect.FeatureReturning | dialect.FeatureInsertReturning | dialect.FeatureOutput
+	case dialect.MariaDB:
+		d.F &^= dialect.FeatureReturning | dialect.FeatureOutput
+	default:
+		d.F &^= dialect.FeatureOutput
+	}
+	return d
+}
+
+// Name implements dialect.Dialect.
+func (d *Named) Name() dialect.Name { return d.N }
+
+// QuoteIdent implements dialect.Dialect.
+func (d *Named) QuoteIdent(s string) string {
+	switch d.N {
+	case dialect.MySQL, dialect.MariaDB:
+		return dialect.QuoteWith(s, '`', '`')
+	case dialect.MSSQL:
+		return dialect.QuoteWith(s, '[', ']')
+	}
+	return dialect.QuoteWith(s, '"', '"')
+}
+
+// Placeholder implements dialect.Dialect.
+func (d *Named) Placeholder(n int) string {
+	switch d.N {
+	case dialect.Postgres:
+		return dialect.DollarPlaceholder(n)
+	case dialect.MSSQL:
+		return dialect.AtPPlaceholder(n)
+	}
+	return "?"
+}
