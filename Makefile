@@ -1,12 +1,12 @@
-MODULES := . $(wildcard dialect/*)
+MODULES := . $(patsubst %/go.mod,%,$(wildcard dialect/*/go.mod))
 
 .PHONY: test test-short lint fmt tidy cover
 
 test:
-	@for m in $(MODULES); do (cd $$m && go test -race -count=1 ./...) || exit 1; done
+	@for m in $(MODULES); do (cd $$m && go test -race -count=1 -timeout 10m ./...) || exit 1; done
 
 test-short:
-	@for m in $(MODULES); do (cd $$m && go test -short -count=1 ./...) || exit 1; done
+	@for m in $(MODULES); do (cd $$m && go test -short -count=1 -timeout 5m ./...) || exit 1; done
 
 lint:
 	@test -z "$$(gofmt -l .)" || (gofmt -l . && exit 1)
