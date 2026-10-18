@@ -23,8 +23,9 @@ type Feature uint64
 
 // Optional capabilities a dialect may support.
 const (
-	FeatureReturning Feature = 1 << iota // INSERT/UPDATE/DELETE ... RETURNING
-	FeatureOutput                        // MSSQL OUTPUT INSERTED.*
+	FeatureReturning       Feature = 1 << iota // INSERT/UPDATE/DELETE ... RETURNING
+	FeatureInsertReturning                     // INSERT ... RETURNING (subset, e.g. MariaDB)
+	FeatureOutput                              // MSSQL OUTPUT INSERTED.*
 	FeatureCTE
 	FeatureSavepoint
 	FeatureReleaseSavepoint
