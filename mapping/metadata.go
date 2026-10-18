@@ -1,0 +1,236 @@
+// Package mapping turns entity structs and their struct tags into metadata:
+// tables, columns, identifiers, associations and indexes.
+package mapping
+
+import (
+	"reflect"
+	"strings"
+
+	"github.com/smatify/smorm/internal/entity"
+	"github.com/smatify/smorm/types"
+)
+
+// HeaderType is the type every entity embeds (re-exported as smorm.Entity).
+var HeaderType = reflect.TypeFor[entity.Header]()
+
+// Generator is an identifier generation strategy.
+type Generator string
+
+// Identifier generators.
+const (
+	GenNone     Generator = "none"     // application assigns the ID
+	GenIdentity Generator = "identity" // auto increment / identity column
+	GenSequence Generator = "sequence" // database sequence
+	GenUUIDv7   Generator = "uuid7"
+	GenUUIDv4   Generator = "uuid4"
+)
+
+// Entity is the metadata of one entity type.
+type Entity struct {
+	GoType     reflect.Type // struct type (not pointer)
+	Name       string       // Go type name
+	Table      string
+	Repository string // optional custom repository type name (for the maker)
+	Comment    string
+	Fields     []*Field // mapped columns in declaration order
+	ID         []*Field
+	Generator  Generator
+	Sequence   string // sequence name for GenSequence
+	Version    *Field
+	Assocs     []*Association
+	Indexes    []*IndexDef
+	// DoctrineStyle is true when the entity uses unexported fields with
+	// generated accessors (the default style of make:entity).
+	DoctrineStyle bool
+	HeaderIndex   []int // reflect index of the embedded header
+
+	byName   map[string]*Field
+	byColumn map[string]*Field
+	assocBy  map[string]*Association
+}
+
+// Field returns the field with the Go name, or nil.
+func (e *Entity) Field(name string) *Field { return e.byName[name] }
+
+// FieldByColumn returns the field mapped to column, or nil.
+func (e *Entity) FieldByColumn(col string) *Field { return e.byColumn[strings.ToLower(col)] }
+
+// Assoc returns the association with the Go name, or nil.
+func (e *Entity) Assoc(name string) *Association { return e.assocBy[name] }
+
+// SingleID returns the identifier field when the ID is not composite.
+func (e *Entity) SingleID() *Field {
+	if len(e.ID) == 1 {
+		return e.ID[0]
+	}
+	return nil
+}
+
+// Columns returns the column names of all fields (including join columns of
+// owning to-one associations, which are fields too).
+func (e *Entity) Columns() []string {
+	out := make([]string, len(e.Fields))
+	for i, f := range e.Fields {
+		out[i] = f.Column
+	}
+	return out
+}
+
+func (e *Entity) index() {
+	e.byName = map[string]*Field{}
+	e.byColumn = map[string]*Field{}
+	e.assocBy = map[string]*Association{}
+	for _, f := range e.Fields {
+		if f.Name != "" {
+			e.byName[f.Name] = f
+		}
+		e.byColumn[strings.ToLower(f.Column)] = f
+	}
+	for _, a := range e.Assocs {
+		e.assocBy[a.Name] = a
+	}
+}
+
+// Field is a mapped column.
+type Field struct {
+	Name     string // Go field name; empty for join columns without own field
+	Column   string
+	Index    []int        // reflect index path from the entity struct
+	GoType   reflect.Type // field type
+	Type     types.Type
+	Options  types.Options
+	Nullable bool
+	NullZero bool // store the Go zero value as NULL
+	Default  *string
+	Comment  string
+	ID       bool
+	Version  bool
+	Exported bool
+	// Assoc is set for join columns of owning to-one associations.
+	Assoc *Association
+
+	generator Generator
+}
+
+// IsPointer reports whether the Go field is a pointer.
+func (f *Field) IsPointer() bool { return f.GoType != nil && f.GoType.Kind() == reflect.Pointer }
+
+// AssocKind is the cardinality of an association.
+type AssocKind int
+
+// Association kinds.
+const (
+	ManyToOne AssocKind = iota + 1
+	OneToMany
+	OneToOne
+	ManyToMany
+)
+
+func (k AssocKind) String() string {
+	return [...]string{"", "manyToOne", "oneToMany", "oneToOne", "manyToMany"}[k]
+}
+
+// IsToOne reports whether the association points to a single entity.
+func (k AssocKind) IsToOne() bool { return k == ManyToOne || k == OneToOne }
+
+// Container is how the Go field holds the associated entity or entities.
+type Container int
+
+// Containers.
+const (
+	ContainerPointer    Container = iota + 1 // *User (Doctrine style, proxy stubs)
+	ContainerRef                             // smorm.Ref[User] (Go style)
+	ContainerCollection                      // smorm.Collection[Post]
+	ContainerSlice                           // []*Post (eager only)
+)
+
+// Fetch is the loading strategy of an association.
+type Fetch string
+
+// Fetch modes.
+const (
+	FetchLazy      Fetch = "lazy"
+	FetchEager     Fetch = "eager"
+	FetchExtraLazy Fetch = "extraLazy"
+)
+
+// Cascade is a set of operations propagated along an association.
+type Cascade uint8
+
+// Cascade operations.
+const (
+	CascadePersist Cascade = 1 << iota
+	CascadeRemove
+	CascadeRefresh
+	CascadeDetach
+	CascadeAll = CascadePersist | CascadeRemove | CascadeRefresh | CascadeDetach
+)
+
+// Has reports whether c includes op.
+func (c Cascade) Has(op Cascade) bool { return c&op != 0 }
+
+// JoinColumn maps a foreign key column to the referenced column.
+type JoinColumn struct {
+	Name       string
+	Referenced string
+	Nullable   bool
+	OnDelete   string
+}
+
+// JoinTable describes the link table of a many-to-many association.
+type JoinTable struct {
+	Name               string
+	JoinColumns        []JoinColumn // pointing to the owning entity
+	InverseJoinColumns []JoinColumn // pointing to the target entity
+}
+
+// Association is a relation to another entity.
+type Association struct {
+	Name          string
+	Kind          AssocKind
+	Index         []int
+	GoType        reflect.Type
+	Container     Container
+	TargetType    reflect.Type // struct type of the target entity
+	Target        *Entity      // resolved target metadata
+	Source        *Entity
+	MappedBy      string // set on the inverse side
+	InversedBy    string // set on the owning side of bidirectional associations
+	Owning        bool
+	JoinColumns   []JoinColumn
+	JoinTable     *JoinTable
+	Cascade       Cascade
+	Fetch         Fetch
+	OrphanRemoval bool
+	OrderBy       string
+	Exported      bool
+}
+
+// Inverse returns the association on the other side, or nil when unidirectional.
+func (a *Association) Inverse() *Association {
+	if a.Target == nil {
+		return nil
+	}
+	if a.MappedBy != "" {
+		return a.Target.Assoc(a.MappedBy)
+	}
+	if a.InversedBy != "" {
+		return a.Target.Assoc(a.InversedBy)
+	}
+	return nil
+}
+
+// IndexDef is an index declared through field tags.
+type IndexDef struct {
+	Name    string
+	Columns []string
+	Unique  bool
+}
+
+// CollectionField is implemented by collection container types such as
+// smorm.Collection[T]; CollectionElem returns T.
+type CollectionField interface{ CollectionElem() reflect.Type }
+
+// RefField is implemented by single reference containers such as
+// smorm.Ref[T]; RefElem returns T.
+type RefField interface{ RefElem() reflect.Type }
