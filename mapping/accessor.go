@@ -50,9 +50,15 @@ func (e *Entity) Accessor() Accessor {
 	e.accessorOnce.Do(func() {
 		generatedMu.RLock()
 		a, ok := generated[e.GoType]
+		g, okG := generatedTypes[e.GoType]
 		generatedMu.RUnlock()
-		if ok {
+		switch {
+		case ok:
 			e.accessor = a
+			e.Generated = true
+			return
+		case okG:
+			e.accessor = newComposedAccessor(e, g)
 			e.Generated = true
 			return
 		}

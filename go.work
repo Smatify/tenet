@@ -4,6 +4,7 @@ toolchain go1.27.2
 
 use (
 	.
+	./gen
 	./dialect/mssqldialect
 	./dialect/mysqldialect
 	./dialect/pgdialect
