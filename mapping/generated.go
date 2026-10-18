@@ -2,6 +2,7 @@ package mapping
 
 import (
 	"reflect"
+	"slices"
 
 	"github.com/smatify/smorm/internal/entity"
 )
@@ -126,4 +127,59 @@ func (a *composedAccessor) AssocAddr(ptr any, i int) any {
 		return f(ptr)
 	}
 	return a.reflectAccessor.AssocAddr(ptr, i)
+}
+
+// accessible reports whether generated code in the entity's package can
+// reach the field at index (every path segment exported or declared in the
+// same package).
+func accessible(t reflect.Type, index []int) bool {
+	pkg := t.PkgPath()
+	for _, x := range index {
+		f := t.Field(x)
+		if !f.IsExported() && f.PkgPath != pkg {
+			return false
+		}
+		t = f.Type
+	}
+	return true
+}
+
+// StaleGenerated lists differences between the registered generated code and
+// the current mapping, e.g. fields added after the last generation. It
+// returns nil when no generated code is registered or it is up to date.
+func (e *Entity) StaleGenerated() []string {
+	generatedMu.RLock()
+	g, ok := generatedTypes[e.GoType]
+	generatedMu.RUnlock()
+	if !ok {
+		return nil
+	}
+	var out []string
+	check := func(kind string, want map[string]bool, have map[string]GeneratedField) {
+		for p := range want {
+			if _, ok := have[p]; !ok {
+				out = append(out, e.Name+": "+kind+" "+p+" is not generated")
+			}
+		}
+		for p := range have {
+			if !want[p] {
+				out = append(out, e.Name+": generated "+kind+" "+p+" is no longer mapped")
+			}
+		}
+	}
+	fields, assocs := map[string]bool{}, map[string]bool{}
+	for _, f := range e.Fields {
+		if f.Index != nil && accessible(e.GoType, f.Index) {
+			fields[path(e.GoType, f.Index)] = true
+		}
+	}
+	for _, a := range e.Assocs {
+		if accessible(e.GoType, a.Index) {
+			assocs[path(e.GoType, a.Index)] = true
+		}
+	}
+	check("field", fields, g.Fields)
+	check("association", assocs, g.Assocs)
+	slices.Sort(out)
+	return out
 }

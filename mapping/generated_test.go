@@ -2,6 +2,7 @@ package mapping
 
 import (
 	"reflect"
+	"slices"
 	"testing"
 	"time"
 
@@ -84,5 +85,48 @@ func TestComposedAccessorEmptyGenerated(t *testing.T) {
 	g := a.New().(*Group)
 	if a.Header(g) != &g.Header {
 		t.Fatal("header fallback")
+	}
+}
+
+func TestStaleGenerated(t *testing.T) {
+	typ := reflect.TypeFor[Profile]()
+	e, err := For[Profile](NewRegistry())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if e.StaleGenerated() != nil {
+		t.Fatal("nothing registered")
+	}
+	RegisterGenerated(typ, GeneratedType{
+		Fields: map[string]GeneratedField{"ID": {}, "Gone": {}},
+	})
+	defer func() {
+		generatedMu.Lock()
+		delete(generatedTypes, typ)
+		generatedMu.Unlock()
+	}()
+	got := e.StaleGenerated()
+	want := []string{"Profile: association User is not generated", "Profile: generated field Gone is no longer mapped"}
+	if !slices.Equal(got, want) {
+		t.Fatalf("got %v", got)
+	}
+}
+
+type foreignEmbed struct {
+	entity.Header
+	ID        int64
+	time.Time `smorm:"column:ts"`
+}
+
+func TestAccessible(t *testing.T) {
+	typ := reflect.TypeFor[Post]()
+	e, _ := For[Post](NewRegistry())
+	if !accessible(typ, e.Field("title").Index) {
+		t.Fatal("same package unexported is accessible")
+	}
+	ft := reflect.TypeFor[foreignEmbed]()
+	// time.Time's unexported "wall" field is not accessible from this package.
+	if accessible(ft, []int{2, 0}) || !accessible(ft, []int{2}) {
+		t.Fatal("foreign unexported field")
 	}
 }
