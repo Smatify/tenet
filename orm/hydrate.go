@@ -72,7 +72,7 @@ func (em *EntityManager) loadWhere(ctx context.Context, meta *mapping.Entity, wh
 		if len(into) > 0 {
 			force = into[0]
 		}
-		ptr, err := h.row(rows, force)
+		ptr, err := h.row(ctx, rows, force)
 		if err != nil {
 			return nil, err
 		}
@@ -121,7 +121,7 @@ func (h *hydrator) prepare() {
 
 // row hydrates the current row. Managed, initialized entities in the identity
 // map are returned unchanged unless force is that entity's entry.
-func (h *hydrator) row(rows *sql.Rows, force *entry) (any, error) {
+func (h *hydrator) row(ctx context.Context, rows *sql.Rows, force *entry) (any, error) {
 	h.prepare()
 	if err := rows.Scan(h.dests...); err != nil {
 		return nil, err
@@ -163,6 +163,9 @@ func (h *hydrator) row(rows *sql.Rows, force *entry) (any, error) {
 	e.initialized = true
 	e.state = StateManaged
 	if err := em.takeSnapshot(e); err != nil {
+		return nil, err
+	}
+	if err := em.lifecycle(ctx, EventPostLoad, e, nil); err != nil {
 		return nil, err
 	}
 	return e.ptr, nil

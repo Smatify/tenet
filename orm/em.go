@@ -20,6 +20,7 @@ type EntityManager struct {
 	identity map[*mapping.Entity]map[any]*entry
 	tracked  []*entry // insertion ordered; may contain detached entries until compacted
 	closed   bool
+	events   *EventManager
 }
 
 // Option configures an EntityManager.
@@ -33,7 +34,7 @@ func WithClock(now func() time.Time) Option { return func(em *EntityManager) { e
 
 // New returns an entity manager working on db (a *dbal.DB, *dbal.Conn or *dbal.Tx).
 func New(db dbal.IDB, opts ...Option) *EntityManager {
-	em := &EntityManager{db: db, reg: mapping.Default, now: time.Now, identity: map[*mapping.Entity]map[any]*entry{}}
+	em := &EntityManager{db: db, reg: mapping.Default, now: time.Now, identity: map[*mapping.Entity]map[any]*entry{}, events: NewEventManager()}
 	for _, o := range opts {
 		o(em)
 	}

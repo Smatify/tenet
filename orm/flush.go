@@ -168,6 +168,7 @@ func (em *EntityManager) discoverNew() error {
 type update struct {
 	e      *entry
 	fields []*mapping.Field
+	cs     *ChangeSet
 }
 
 // Flush writes all pending inserts, updates and deletes in one transaction.
@@ -185,33 +186,39 @@ func (em *EntityManager) Flush(ctx context.Context) error {
 	var updates []update
 	now := em.now()
 	for _, e := range em.tracked {
+		if e.state == StateNew {
+			if err := em.lifecycle(ctx, EventPrePersist, e, nil); err != nil {
+				return err
+			}
+		}
+	}
+	for _, e := range em.tracked {
 		switch e.state {
 		case StateNew:
 			inserts = append(inserts, e)
 		case StateRemoved:
+			if err := em.lifecycle(ctx, EventPreRemove, e, nil); err != nil {
+				return err
+			}
 			removes = append(removes, e)
 		case StateManaged:
 			if !e.initialized {
 				continue
 			}
-			changed, _, err := em.changes(e)
+			u, err := em.prepareUpdate(ctx, e, now)
 			if err != nil {
 				return err
 			}
-			if len(changed) == 0 {
-				continue
+			if u != nil {
+				updates = append(updates, *u)
 			}
-			if t, ok := e.ptr.(mapping.UpdatedToucher); ok {
-				t.TouchUpdated(now)
-				if changed, _, err = em.changes(e); err != nil {
-					return err
-				}
-			}
-			updates = append(updates, update{e: e, fields: changed})
 		}
 	}
 	if len(inserts)+len(updates)+len(removes) == 0 {
 		return nil
+	}
+	if err := em.events.dispatch(ctx, EventOnFlush, &EventArgs{EM: em}); err != nil {
+		return err
 	}
 	ordered, err := commitOrder(em, inserts)
 	if err != nil {
@@ -234,6 +241,9 @@ func (em *EntityManager) Flush(ctx context.Context) error {
 			if e.key == nil {
 				em.register(e, idKey(idValues(e.meta, e.ptr)))
 			}
+			if err := em.lifecycle(ctx, EventPostPersist, e, nil); err != nil {
+				return err
+			}
 		}
 		for _, e := range ordered {
 			if len(e.deferred) > 0 {
@@ -248,6 +258,9 @@ func (em *EntityManager) Flush(ctx context.Context) error {
 			if err := em.update(ctx, db, u.e, u.fields); err != nil {
 				return err
 			}
+			if err := em.lifecycle(ctx, EventPostUpdate, u.e, u.cs); err != nil {
+				return err
+			}
 		}
 		for _, n := range nullify {
 			if err := em.nullify(ctx, db, n.e, n.f); err != nil {
@@ -256,6 +269,9 @@ func (em *EntityManager) Flush(ctx context.Context) error {
 		}
 		for _, e := range deleteOrder {
 			if err := em.delete(ctx, db, e); err != nil {
+				return err
+			}
+			if err := em.lifecycle(ctx, EventPostRemove, e, nil); err != nil {
 				return err
 			}
 		}
@@ -285,7 +301,26 @@ func (em *EntityManager) Flush(ctx context.Context) error {
 		em.forget(e)
 	}
 	em.compact()
-	return nil
+	return em.events.dispatch(ctx, EventPostFlush, &EventArgs{EM: em})
+}
+
+// prepareUpdate computes the change set of a managed entity and runs the
+// update hooks. It returns nil when nothing changed.
+func (em *EntityManager) prepareUpdate(ctx context.Context, e *entry, now time.Time) (*update, error) {
+	changed, vals, err := em.changes(e)
+	if err != nil || len(changed) == 0 {
+		return nil, err
+	}
+	if err := em.lifecycle(ctx, EventPreUpdate, e, newChangeSet(e, changed, vals)); err != nil {
+		return nil, err
+	}
+	if t, ok := e.ptr.(mapping.UpdatedToucher); ok {
+		t.TouchUpdated(now)
+	}
+	if changed, vals, err = em.changes(e); err != nil || len(changed) == 0 {
+		return nil, err
+	}
+	return &update{e: e, fields: changed, cs: newChangeSet(e, changed, vals)}, nil
 }
 
 // compact drops detached entries from the tracked list.
