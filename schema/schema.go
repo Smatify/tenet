@@ -274,6 +274,9 @@ type Column struct {
 	// RawType is a verbatim SQL type used for database types smorm does not
 	// map (filled by introspection). It takes precedence over Type.
 	RawType string
+	// DefaultName is the name of the default constraint on SQL Server when it
+	// differs from DefaultConstraintName (filled by introspection).
+	DefaultName string
 }
 
 // SetNullable sets nullability and returns c for chaining.

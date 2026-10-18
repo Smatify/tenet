@@ -100,11 +100,51 @@ func (g *DDL) ColumnDeclaration(t *Table, c *Column) (string, error) {
 // Foreign keys are inlined on SQLite (which cannot add them later) and
 // returned separately by ForeignKeys for the other databases.
 func (g *DDL) CreateTable(t *Table) ([]string, error) {
+	stmt, err := g.createTableStmt(t, t.Name)
+	if err != nil {
+		return nil, err
+	}
+	out := []string{stmt}
+	for _, i := range t.Indexes {
+		out = append(out, g.CreateIndex(t.Name, i))
+	}
+	return append(out, g.comments(t)...), nil
+}
+
+func (g *DDL) comments(t *Table) []string {
+	if g.name() != dialect.Postgres {
+		return nil
+	}
+	var out []string
+	if t.Comment != "" {
+		out = append(out, g.tableComment(t))
+	}
+	for _, c := range t.Columns {
+		if c.Comment != "" {
+			out = append(out, g.columnComment(t.Name, c))
+		}
+	}
+	return out
+}
+
+func (g *DDL) tableComment(t *Table) string {
+	if g.isMySQL() {
+		return "ALTER TABLE " + g.q(t.Name) + " COMMENT = " + g.d.QuoteString(t.Comment)
+	}
+	val := "NULL"
+	if t.Comment != "" {
+		val = g.d.QuoteString(t.Comment)
+	}
+	return "COMMENT ON TABLE " + g.q(t.Name) + " IS " + val
+}
+
+// createTableStmt renders CREATE TABLE for t under the given name.
+func (g *DDL) createTableStmt(t *Table, name string) (string, error) {
 	var defs []string
 	for _, c := range t.Columns {
 		decl, err := g.ColumnDeclaration(t, c)
 		if err != nil {
-			return nil, err
+			return "", err
 		}
 		defs = append(defs, decl)
 	}
@@ -116,28 +156,14 @@ func (g *DDL) CreateTable(t *Table) ([]string, error) {
 			defs = append(defs, g.foreignKeyDefinition(fk))
 		}
 	}
-	stmt := "CREATE TABLE " + g.q(t.Name) + " (" + strings.Join(defs, ", ") + ")"
+	stmt := "CREATE TABLE " + g.q(name) + " (" + strings.Join(defs, ", ") + ")"
 	if g.isMySQL() {
 		stmt += " DEFAULT CHARACTER SET utf8mb4 COLLATE `utf8mb4_unicode_ci` ENGINE = InnoDB"
 		if t.Comment != "" {
 			stmt += " COMMENT = " + g.d.QuoteString(t.Comment)
 		}
 	}
-	out := []string{stmt}
-	for _, i := range t.Indexes {
-		out = append(out, g.CreateIndex(t.Name, i))
-	}
-	if g.name() == dialect.Postgres {
-		if t.Comment != "" {
-			out = append(out, "COMMENT ON TABLE "+g.q(t.Name)+" IS "+g.d.QuoteString(t.Comment))
-		}
-		for _, c := range t.Columns {
-			if c.Comment != "" {
-				out = append(out, g.columnComment(t.Name, c))
-			}
-		}
-	}
-	return out, nil
+	return stmt, nil
 }
 
 func (g *DDL) columnComment(table string, c *Column) string {

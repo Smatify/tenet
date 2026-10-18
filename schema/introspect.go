@@ -682,7 +682,7 @@ type mssqlIntrospector struct{}
 
 func (mssqlIntrospector) introspect(ctx context.Context, q Queryer, b *builder) error {
 	err := scanAll(ctx, q, `SELECT t.name, c.name, ty.name, c.max_length, c.precision, c.scale, c.is_nullable,
-			c.is_identity, dc.definition
+			c.is_identity, dc.definition, COALESCE(dc.name, '')
 		FROM sys.columns c
 		JOIN sys.tables t ON t.object_id = c.object_id
 		JOIN sys.types ty ON ty.user_type_id = c.user_type_id
@@ -692,13 +692,15 @@ func (mssqlIntrospector) introspect(ctx context.Context, q Queryer, b *builder) 
 		var maxLen, prec, scale int
 		var nullable, identity bool
 		var def sql.NullString
-		if err := r.Scan(&table, &name, &typ, &maxLen, &prec, &scale, &nullable, &identity, &def); err != nil {
+		var defName string
+		if err := r.Scan(&table, &name, &typ, &maxLen, &prec, &scale, &nullable, &identity, &def, &defName); err != nil {
 			return err
 		}
 		c := b.table(table).AddColumn(name, "")
 		c.Nullable = nullable
 		c.AutoIncrement = identity
 		c.Default = strPtr(def)
+		c.DefaultName = defName
 		switch typ {
 		case "nvarchar":
 			if maxLen == -1 {
