@@ -32,7 +32,7 @@ const (
 
 // FieldTypes lists the field types make:entity offers.
 var FieldTypes = []string{"string", "text", "integer", "smallint", "bigint", "boolean", "float", "decimal",
-	"datetime", "datetimetz", "date", "time", "json", "uuid", "binary", "relation"}
+	"datetime", "datetimetz", "date", "time", "json", "uuid", "binary", "relation", "embedded"}
 
 // FieldSpec describes a field to add.
 type FieldSpec struct {
@@ -48,6 +48,9 @@ type FieldSpec struct {
 	Target        string // target entity name
 	Inverse       string // property on the target ("" = unidirectional)
 	OrphanRemoval bool
+
+	Embeddable string // struct name when Type == "embedded"
+	Prefix     string // column prefix ("" = default, "-" = none)
 }
 
 // EntitySpec describes an entity to create or extend.
@@ -89,9 +92,12 @@ func (mk *Maker) Apply(spec EntitySpec) ([]string, error) {
 	}
 	for _, f := range spec.Fields {
 		var err error
-		if f.Type == "relation" {
+		switch f.Type {
+		case "relation":
 			err = w.addRelation(spec.Name, f)
-		} else {
+		case "embedded":
+			err = w.addEmbedded(spec.Name, f)
+		default:
 			err = w.addField(spec.Name, f)
 		}
 		if err != nil {

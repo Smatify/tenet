@@ -305,6 +305,10 @@ func (g *DDL) sqliteRebuild(td *TableDiff) ([]string, error) {
 	return out, nil
 }
 
+// DependencyOrder sorts tables so that tables referencing others come
+// first (the order for dropping tables or deleting their rows).
+func DependencyOrder(tables []*Table) []*Table { return dropOrder(tables) }
+
 // dropOrder sorts tables so that referencing tables are dropped before the
 // tables they reference (required where foreign keys cannot be dropped
 // first, e.g. SQLite).

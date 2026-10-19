@@ -122,6 +122,10 @@ func askField(c *console.Ctx, entity string) (FieldSpec, bool) {
 	case "relation":
 		askRelation(c, entity, &f)
 		return f, true
+	case "embedded":
+		f.Embeddable = upper(c.Ask("Which embeddable (create it with make:embeddable)?", ""))
+		f.Prefix = c.Ask("Column prefix (empty: <property>_, - for none)", "")
+		return f, true
 	case "string":
 		f.Length = askInt(c, "Field length", 255)
 	case "decimal":

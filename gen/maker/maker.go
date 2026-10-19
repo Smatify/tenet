@@ -14,7 +14,7 @@ import (
 // Register adds the maker commands to app.
 func Register(app *console.App) {
 	app.Add(makeMigration(), generateCmd())
-	app.Add(makeEntity())
+	app.Add(makeEntity(), makeValue(KindEmbeddable), makeValue(KindTrait), makeFixtures())
 }
 
 func makeMigration() console.Command {

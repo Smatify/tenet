@@ -19,6 +19,7 @@ import (
 
 	"github.com/smatify/smorm/dbal"
 	"github.com/smatify/smorm/dialect"
+	"github.com/smatify/smorm/fixtures"
 	"github.com/smatify/smorm/internal/brand"
 	"github.com/smatify/smorm/mapping"
 	"github.com/smatify/smorm/migrations"
@@ -56,6 +57,9 @@ type Config struct {
 
 	// IgnoreTables excludes tables from diffs and validation.
 	IgnoreTables func(table string) bool
+
+	// Fixtures defaults to fixtures.Default.
+	Fixtures *fixtures.Registry
 }
 
 // App is a console application.
@@ -81,6 +85,9 @@ func New(cfg Config) *App {
 	}
 	if cfg.Registry == nil {
 		cfg.Registry = mapping.Default
+	}
+	if cfg.Fixtures == nil {
+		cfg.Fixtures = fixtures.Default
 	}
 	if cfg.DSN == "" {
 		cfg.DSN = os.Getenv(brand.Env("database_url"))

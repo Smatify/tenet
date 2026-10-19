@@ -9,12 +9,13 @@ import (
 	"text/tabwriter"
 	"time"
 
+	"github.com/smatify/smorm/fixtures"
 	"github.com/smatify/smorm/migrations"
 	"github.com/smatify/smorm/validate"
 )
 
 func builtinCommands() []Command {
-	return []Command{migrateCmd(), statusCmd(), executeCmd(), generateCmd(), diffCmd(), validateCmd(), updateCmd()}
+	return []Command{migrateCmd(), statusCmd(), executeCmd(), generateCmd(), diffCmd(), validateCmd(), updateCmd(), fixturesCmd()}
 }
 
 // ignore combines the configured filter with the migrator's own tables.
@@ -336,6 +337,53 @@ func updateCmd() Command {
 				}
 			}
 			c.Success(fmt.Sprintf("Database schema updated successfully (%d statements).", len(rep.Statements)))
+			return nil
+		},
+	}
+}
+
+func fixturesCmd() Command {
+	var appendRows *bool
+	var groups *string
+	return Command{
+		Name:        "fixtures:load",
+		Description: "Purge the database and load the data fixtures",
+		Flags: func(fs *flag.FlagSet) {
+			appendRows = fs.Bool("append", false, "append the data instead of purging the tables")
+			groups = fs.String("group", "", "only load fixtures of these groups (comma separated)")
+		},
+		Run: func(ctx context.Context, c *Ctx) error {
+			a := c.App
+			db, err := a.DB()
+			if err != nil {
+				return err
+			}
+			ents, err := a.Entities()
+			if err != nil {
+				return err
+			}
+			if !*appendRows && c.Interactive && !c.Confirm("Careful, the database tables will be purged. Do you want to continue?", false) {
+				c.Printf("\n [CANCELLED] Fixtures were not loaded.\n")
+				return nil
+			}
+			m, _ := a.Migrator()
+			var gs []string
+			if *groups != "" {
+				gs = strings.Split(*groups, ",")
+			}
+			if !*appendRows {
+				c.Printf("  > purging database\n")
+			}
+			done, err := a.Config.Fixtures.Load(ctx, db, a.Config.Registry, fixtures.Options{
+				Groups: gs, Append: *appendRows, Entities: ents, Exclude: a.ignore(m),
+			})
+			if err != nil {
+				return err
+			}
+			for _, n := range done {
+				c.Printf("  > loading %s\n", n)
+			}
+			c.Success(fmt.Sprintf("Loaded %d fixture(s).", len(done)))
 			return nil
 		},
 	}
