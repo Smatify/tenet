@@ -60,6 +60,16 @@ func (em *EntityManager) loadWhere(ctx context.Context, meta *mapping.Entity, wh
 	if limit > 0 {
 		q.Limit(limit)
 	}
+	var force *entry
+	if len(into) > 0 {
+		force = into[0]
+	}
+	return em.loadQuery(ctx, meta, q, force)
+}
+
+// loadQuery runs q, which must select the columns of meta.Fields in order,
+// and hydrates the rows.
+func (em *EntityManager) loadQuery(ctx context.Context, meta *mapping.Entity, q *dbal.SelectQuery, force *entry) ([]any, error) {
 	rows, err := q.Rows(ctx)
 	if err != nil {
 		return nil, err
@@ -68,10 +78,6 @@ func (em *EntityManager) loadWhere(ctx context.Context, meta *mapping.Entity, wh
 	var out []any
 	h := em.newHydrator(meta)
 	for rows.Next() {
-		var force *entry
-		if len(into) > 0 {
-			force = into[0]
-		}
 		ptr, err := h.row(ctx, rows, force)
 		if err != nil {
 			return nil, err
