@@ -55,7 +55,7 @@ func (em *EntityManager) preloadPath(ctx context.Context, meta *mapping.Entity, 
 func (em *EntityManager) preloadAssoc(ctx context.Context, a *mapping.Association, owners []any) ([]any, error) {
 	if a.Kind.IsToOne() {
 		if !a.Owning {
-			return nil, fmt.Errorf("%s.%s: preloading the inverse side of oneToOne is not supported", a.Source.Name, a.Name)
+			return em.preloadInverseOne(ctx, a, owners)
 		}
 		var targets []any
 		seen := map[any]bool{}
@@ -238,7 +238,10 @@ func (em *EntityManager) setToMany(a *mapping.Association, owner any, targets []
 // their own loads).
 func (em *EntityManager) preloadEager(ctx context.Context, meta *mapping.Entity, loaded []any) error {
 	for _, a := range meta.Assocs {
-		if a.Fetch != mapping.FetchEager || (a.Kind.IsToOne() && !a.Owning) {
+		// The inverse side of oneToOne cannot be a proxy (its key lives in
+		// the other table), so it is always loaded, like in Doctrine.
+		inverseOne := a.Kind == mapping.OneToOne && !a.Owning
+		if a.Fetch != mapping.FetchEager && !inverseOne {
 			continue
 		}
 		if _, err := em.preloadAssoc(ctx, a, loaded); err != nil {
@@ -246,4 +249,62 @@ func (em *EntityManager) preloadEager(ctx context.Context, meta *mapping.Entity,
 		}
 	}
 	return nil
+}
+
+// preloadInverseOne loads the inverse side of a oneToOne association: the
+// target rows whose foreign key points to the owners.
+func (em *EntityManager) preloadInverseOne(ctx context.Context, a *mapping.Association, owners []any) ([]any, error) {
+	inv := a.Inverse()
+	jc := inv.JoinColumns[0]
+	ref := a.Source.FieldByColumn(jc.Referenced)
+	var keys []any
+	byKey := map[any][]any{}
+	for _, o := range owners {
+		v := a.Source.Accessor().Get(o, ref.Pos)
+		k := normalizeKey(v)
+		if _, ok := byKey[k]; !ok {
+			keys = append(keys, idArg{f: ref, v: v})
+		}
+		byKey[k] = append(byKey[k], o)
+	}
+	var all []any
+	found := map[any]any{}
+	for len(keys) > 0 {
+		n := min(len(keys), preloadChunk)
+		chunk := keys[:n]
+		keys = keys[n:]
+		res, err := em.loadWhere(ctx, a.Target, func(q *dbal.SelectQuery) {
+			q.Where("? IN ?", dbal.Ident(jc.Name), dbal.In(chunk))
+		}, 0)
+		if err != nil {
+			return nil, err
+		}
+		for _, t := range res {
+			if owner := related(a.Target, t, inv); len(owner) > 0 {
+				found[normalizeKey(a.Source.Accessor().Get(owner[0], ref.Pos))] = t
+			}
+			all = append(all, t)
+		}
+	}
+	for k, os := range byKey {
+		for _, o := range os {
+			setToOne(a, o, found[k])
+		}
+	}
+	return all, nil
+}
+
+// setToOne stores target (or nil) in a to-one association field.
+func setToOne(a *mapping.Association, owner, target any) {
+	addr := a.Source.Accessor().AssocAddr(owner, a.Pos)
+	if a.Container == mapping.ContainerRef {
+		addr.(refValue).setRefPtr(target)
+		return
+	}
+	field := reflect.ValueOf(addr).Elem()
+	if target == nil {
+		field.SetZero()
+		return
+	}
+	field.Set(reflect.ValueOf(target))
 }
