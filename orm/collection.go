@@ -181,10 +181,18 @@ type collection interface {
 	IsInitialized() bool
 	state() *collState
 	setState(*collState)
+	fill(items []any)
 	load(ctx context.Context) error
 }
 
-func (c *Collection[T]) state() *collState     { return c.st }
+func (c *Collection[T]) state() *collState { return c.st }
+
+func (c *Collection[T]) fill(items []any) {
+	c.items = make([]*T, len(items))
+	for i, it := range items {
+		c.items[i] = it.(*T)
+	}
+}
 func (c *Collection[T]) setState(s *collState) { c.st = s }
 
 // Ref is a reference to a single entity for Go style entities with exported

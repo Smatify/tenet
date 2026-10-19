@@ -78,7 +78,16 @@ func (em *EntityManager) loadWhere(ctx context.Context, meta *mapping.Entity, wh
 		}
 		out = append(out, ptr)
 	}
-	return out, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	rows.Close() // free the connection before eager loading
+	if len(out) > 0 {
+		if err := em.preloadEager(ctx, meta, out); err != nil {
+			return nil, err
+		}
+	}
+	return out, nil
 }
 
 // hydrator turns rows with the columns of meta.Fields (in order) into entities.
