@@ -23,7 +23,7 @@ func (g *DDL) Migrate(diff *Diff) ([]string, error) {
 		dropFKs, pre, creates, alters, drops, addFKs, post []string
 	)
 	dropped := map[string]bool{}
-	for _, t := range diff.DropTables {
+	for _, t := range dropOrder(diff.DropTables) {
 		dropped[strings.ToLower(t.Name)] = true
 		for _, fk := range t.ForeignKeys {
 			if s, ok := g.DropForeignKey(t.Name, fk); ok {
@@ -303,4 +303,40 @@ func (g *DDL) sqliteRebuild(td *TableDiff) ([]string, error) {
 		out = append(out, g.CreateIndex(t.Name, i))
 	}
 	return out, nil
+}
+
+// dropOrder sorts tables so that referencing tables are dropped before the
+// tables they reference (required where foreign keys cannot be dropped
+// first, e.g. SQLite).
+func dropOrder(tables []*Table) []*Table {
+	byName := map[string]*Table{}
+	for _, t := range tables {
+		byName[strings.ToLower(t.Name)] = t
+	}
+	referencedBy := map[*Table][]*Table{}
+	for _, t := range tables {
+		for _, fk := range t.ForeignKeys {
+			if ref := byName[strings.ToLower(fk.RefTable)]; ref != nil && ref != t {
+				referencedBy[ref] = append(referencedBy[ref], t)
+			}
+		}
+	}
+	var out []*Table
+	state := map[*Table]int{}
+	var visit func(t *Table)
+	visit = func(t *Table) {
+		if state[t] != 0 {
+			return // done or in a cycle; cycles are broken by dropping FKs first elsewhere
+		}
+		state[t] = 1
+		for _, r := range referencedBy[t] {
+			visit(r)
+		}
+		state[t] = 2
+		out = append(out, t)
+	}
+	for _, t := range tables {
+		visit(t)
+	}
+	return out
 }

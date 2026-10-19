@@ -209,3 +209,13 @@ func TestMigrateErrors(t *testing.T) {
 		}
 	}
 }
+
+func TestDropOrder(t *testing.T) {
+	from := buildBlog()
+	tags := from.CreateTable("tags")
+	tags.AddColumn("post_id", types.BigInt)
+	tags.AddForeignKey([]string{"post_id"}, "posts", []string{"id"})
+	got := migrateFor(t, dialect.SQLite, from, New())
+	want := []string{`DROP TABLE "tags"`, `DROP TABLE "posts"`, `DROP TABLE "users"`, `DROP SEQUENCE "seq"`}
+	expectStmts(t, got, want...)
+}
