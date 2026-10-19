@@ -179,6 +179,9 @@ func (em *EntityManager) Flush(ctx context.Context) error {
 		return ErrClosed
 	}
 	em.compact()
+	if err := em.scheduleOrphans(); err != nil {
+		return err
+	}
 	if err := em.discoverNew(); err != nil {
 		return err
 	}
@@ -214,7 +217,8 @@ func (em *EntityManager) Flush(ctx context.Context) error {
 			}
 		}
 	}
-	if len(inserts)+len(updates)+len(removes) == 0 {
+	joins := em.joinTableChanges()
+	if len(inserts)+len(updates)+len(removes)+len(joins) == 0 {
 		return nil
 	}
 	if err := em.events.dispatch(ctx, EventOnFlush, &EventArgs{EM: em}); err != nil {
@@ -262,6 +266,15 @@ func (em *EntityManager) Flush(ctx context.Context) error {
 				return err
 			}
 		}
+		for _, r := range joins {
+			target := em.entryOf(targetMeta(r), r.target)
+			if target == nil || target.state == StateRemoved {
+				continue
+			}
+			if err := em.writeJoinRow(ctx, db, r, target.meta); err != nil {
+				return wrapErr(r.owner.meta, "join table", err)
+			}
+		}
 		for _, n := range nullify {
 			if err := em.nullify(ctx, db, n.e, n.f); err != nil {
 				return err
@@ -288,10 +301,12 @@ func (em *EntityManager) Flush(ctx context.Context) error {
 	}
 	for _, e := range ordered {
 		e.state = StateManaged
+		em.adoptCollections(e)
 		if err := em.takeSnapshot(e); err != nil {
 			return err
 		}
 	}
+	em.syncCollectionSnapshots()
 	for _, u := range updates {
 		if err := em.takeSnapshot(u.e); err != nil {
 			return err
@@ -466,4 +481,13 @@ func wrapErr(meta *mapping.Entity, op string, err error) error {
 		return nil
 	}
 	return fmt.Errorf("%s: %s: %w", meta.Name, op, err)
+}
+
+func targetMeta(r joinRow) *mapping.Entity {
+	for _, a := range r.owner.meta.Assocs {
+		if a.JoinTable != nil && a.JoinTable.Name == r.spec.table {
+			return a.Target
+		}
+	}
+	return nil
 }

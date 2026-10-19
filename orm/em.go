@@ -429,17 +429,19 @@ func (em *EntityManager) cascade(e *entry, op mapping.Cascade, fn func(*mapping.
 	return nil
 }
 
-// related returns the entities held by association a of ptr.
+// related returns the entities held by association a of ptr (without
+// loading lazy collections).
 func related(meta *mapping.Entity, ptr any, a *mapping.Association) []any {
-	v := meta.Accessor().GetAssoc(ptr, a.Pos)
+	acc := meta.Accessor()
 	switch a.Container {
 	case mapping.ContainerPointer:
+		v := acc.GetAssoc(ptr, a.Pos)
 		if v == nil || reflect.ValueOf(v).IsNil() {
 			return nil
 		}
 		return []any{v}
 	case mapping.ContainerSlice:
-		rv := reflect.ValueOf(v)
+		rv := reflect.ValueOf(acc.GetAssoc(ptr, a.Pos))
 		out := make([]any, 0, rv.Len())
 		for i := range rv.Len() {
 			if el := rv.Index(i); !el.IsNil() {
@@ -447,10 +449,12 @@ func related(meta *mapping.Entity, ptr any, a *mapping.Association) []any {
 			}
 		}
 		return out
-	default:
-		if c, ok := v.(interface{ Entities() []any }); ok {
-			return c.Entities()
+	case mapping.ContainerRef:
+		if p := acc.AssocAddr(ptr, a.Pos).(refValue).refPtr(); p != nil {
+			return []any{p}
 		}
+	case mapping.ContainerCollection:
+		return acc.AssocAddr(ptr, a.Pos).(collection).Entities()
 	}
 	return nil
 }

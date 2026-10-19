@@ -59,3 +59,15 @@ func RecoverLazyLoad(next http.Handler, onError func(w http.ResponseWriter, r *h
 		next.ServeHTTP(w, r)
 	})
 }
+
+// Collection holds the entities of a to-many association; see orm.Collection.
+type Collection[T any] = orm.Collection[T]
+
+// Ref references a single entity in Go style entities; see orm.Ref.
+type Ref[T any] = orm.Ref[T]
+
+// NewCollection returns an initialized collection with items.
+func NewCollection[T any](items ...*T) Collection[T] { return orm.NewCollection(items...) }
+
+// NewRef returns a reference to p.
+func NewRef[T any](p *T) Ref[T] { return orm.NewRef(p) }

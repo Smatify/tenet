@@ -162,6 +162,7 @@ func (h *hydrator) row(ctx context.Context, rows *sql.Rows, force *entry) (any, 
 	}
 	e.initialized = true
 	e.state = StateManaged
+	em.wireCollections(e)
 	if err := em.takeSnapshot(e); err != nil {
 		return nil, err
 	}
@@ -173,8 +174,17 @@ func (h *hydrator) row(ctx context.Context, rows *sql.Rows, force *entry) (any, 
 
 // setAssoc sets an owning to-one association from its foreign key value.
 func (h *hydrator) setAssoc(e *entry, a *mapping.Association, fk reflect.Value) {
+	if a.Container == mapping.ContainerRef {
+		r := h.meta.Accessor().AssocAddr(e.ptr, a.Pos).(refValue)
+		if fk.IsNil() {
+			r.setRefPtr(nil)
+		} else {
+			r.setRefPtr(h.em.reference(a.Target, []any{fk.Elem().Interface()}))
+		}
+		return
+	}
 	if a.Container != mapping.ContainerPointer {
-		return // Ref containers are wired by the lazy loading layer
+		return
 	}
 	addr := reflect.ValueOf(h.meta.Accessor().AssocAddr(e.ptr, a.Pos)).Elem()
 	if fk.IsNil() {
