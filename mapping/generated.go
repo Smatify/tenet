@@ -3,6 +3,7 @@ package mapping
 import (
 	"reflect"
 	"slices"
+	"strings"
 
 	"github.com/smatify/smorm/internal/entity"
 )
@@ -181,5 +182,23 @@ func (e *Entity) StaleGenerated() []string {
 	check("field", fields, g.Fields)
 	check("association", assocs, g.Assocs)
 	slices.Sort(out)
+	return out
+}
+
+// GeneratedEntities returns the entity types that registered generated
+// code, i.e. every entity whose package is linked into the binary.
+func GeneratedEntities() []reflect.Type {
+	generatedMu.RLock()
+	defer generatedMu.RUnlock()
+	out := make([]reflect.Type, 0, len(generatedTypes)+len(generated))
+	for t := range generatedTypes {
+		out = append(out, t)
+	}
+	for t := range generated {
+		if _, dup := generatedTypes[t]; !dup {
+			out = append(out, t)
+		}
+	}
+	slices.SortFunc(out, func(a, b reflect.Type) int { return strings.Compare(a.String(), b.String()) })
 	return out
 }

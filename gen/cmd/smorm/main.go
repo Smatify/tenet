@@ -1,0 +1,67 @@
+// Command smorm sets up projects and regenerates entity code:
+//
+//	smorm init --dialect postgres
+//	smorm generate [dir...]
+package main
+
+import (
+	"flag"
+	"fmt"
+	"io"
+	"os"
+
+	"github.com/smatify/smorm/gen"
+	"github.com/smatify/smorm/gen/scaffold"
+	"github.com/smatify/smorm/internal/brand"
+)
+
+func main() { os.Exit(run(os.Args[1:], os.Stdout, os.Stderr)) }
+
+func run(args []string, out, errOut io.Writer) int {
+	if len(args) == 0 {
+		fmt.Fprintf(errOut, "usage: %s init --dialect <postgres|mysql|mariadb|sqlite|mssql> | generate [dir...]\n", brand.CLIName)
+		return 2
+	}
+	switch args[0] {
+	case "init":
+		fs := flag.NewFlagSet("init", flag.ContinueOnError)
+		fs.SetOutput(errOut)
+		o := scaffold.Options{}
+		fs.StringVar(&o.Dir, "dir", ".", "project root (containing go.mod)")
+		fs.StringVar(&o.Dialect, "dialect", "postgres", "database: postgres, mysql, mariadb, sqlite or mssql")
+		fs.StringVar(&o.EntityDir, "entities", "internal/entity", "entity package directory")
+		fs.StringVar(&o.MigrationsDir, "migrations", "migrations", "migrations directory")
+		fs.StringVar(&o.Format, "format", "go", "migration format: go or sql")
+		if err := fs.Parse(args[1:]); err != nil {
+			return 2
+		}
+		files, err := scaffold.Init(o)
+		if err != nil {
+			fmt.Fprintln(errOut, err)
+			return 1
+		}
+		for _, f := range files {
+			fmt.Fprintln(out, " created:", f)
+		}
+		fmt.Fprintf(out, "\nNext steps:\n  go mod tidy\n  export %s=...\n  go run ./cmd/console make:entity\n", brand.Env("database_url"))
+		return 0
+	case "generate":
+		dirs := args[1:]
+		if len(dirs) == 0 {
+			dirs = []string{"."}
+		}
+		for _, d := range dirs {
+			f, err := gen.Generate(d)
+			if err != nil {
+				fmt.Fprintln(errOut, err)
+				return 1
+			}
+			if f != "" {
+				fmt.Fprintln(out, " generated:", f)
+			}
+		}
+		return 0
+	}
+	fmt.Fprintf(errOut, "unknown command %q\n", args[0])
+	return 2
+}
