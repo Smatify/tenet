@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql/driver"
 	"errors"
+	"fmt"
 	"slices"
 	"strings"
 	"testing"
@@ -243,5 +244,48 @@ func TestHelpers(t *testing.T) {
 		if got := nextValSQL(testdialect.Like(n), "s"); got != want {
 			t.Errorf("%s: %s", n, got)
 		}
+	}
+}
+
+func TestBatchInsert(t *testing.T) {
+	ctx := context.Background()
+	em, rec := newUnitEM(t, dialect.Postgres)
+	rec.Returns("RETURNING", []string{"id"}, []driver.Value{int64(1)})
+	a := &uAuthor{Name: "a"}
+	_ = em.Persist(a)
+	for _, id := range []string{"x", "y", "z"} {
+		if err := em.Persist(&uBook{ID: id, Author: a}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := em.Flush(ctx); err != nil {
+		t.Fatal(err)
+	}
+	q := rec.Queries()
+	if len(q) != 4 || !strings.Contains(q[2], `VALUES ($1, $2, $3), ($4, $5, $6), ($7, $8, $9)`) {
+		t.Fatalf("queries:\n%s", strings.Join(q, "\n"))
+	}
+	if len(rec.Calls()[2].Args) != 9 {
+		t.Fatal("args")
+	}
+	// Chunking respects the bind parameter limit.
+	em2, rec2 := newUnitEM(t, dialect.Postgres)
+	rec2.Returns("RETURNING", []string{"id"}, []driver.Value{int64(1)})
+	b := &uAuthor{Name: "b"}
+	_ = em2.Persist(b)
+	for i := range 1500 {
+		_ = em2.Persist(&uBook{ID: fmt.Sprint("id", i), Author: b})
+	}
+	if err := em2.Flush(ctx); err != nil {
+		t.Fatal(err)
+	}
+	inserts := 0
+	for _, s := range rec2.Queries() {
+		if strings.HasPrefix(s, `INSERT INTO "b"`) {
+			inserts++
+		}
+	}
+	if inserts != 3 { // 3 columns -> 500 rows per statement
+		t.Fatalf("inserts = %d", inserts)
 	}
 }
