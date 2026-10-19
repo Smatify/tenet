@@ -30,3 +30,14 @@ jobs:
       - name: Integration tests (testcontainers)
         working-directory: dialect/${{ matrix.module }}
         run: go test -race -count=1 -timeout 20m ./...
+
+  e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Workflow test (init, make:entity, migrations, demo)
+        working-directory: gen
+        run: go test -count=1 -timeout 15m ./internal/e2e
