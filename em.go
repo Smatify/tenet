@@ -49,3 +49,28 @@ func Reference[T any](em *EntityManager, id ...any) (*T, error) {
 	}
 	return v.(*T), nil
 }
+
+// Locking.
+type (
+	LockMode            = orm.LockMode
+	OptimisticLockError = orm.OptimisticLockError
+)
+
+// Lock modes.
+const (
+	LockOptimistic       = orm.LockOptimistic
+	LockPessimisticWrite = orm.LockPessimisticWrite
+	LockPessimisticRead  = orm.LockPessimisticRead
+)
+
+// ErrOptimisticLock is matched (errors.Is) by optimistic lock failures.
+var ErrOptimisticLock = orm.ErrOptimisticLock
+
+// FindLocked loads T with a pessimistic lock inside a transaction.
+func FindLocked[T any](ctx context.Context, em *EntityManager, mode LockMode, id ...any) (*T, error) {
+	v, err := em.FindLocked(ctx, reflect.TypeFor[T](), mode, id...)
+	if err != nil {
+		return nil, err
+	}
+	return v.(*T), nil
+}

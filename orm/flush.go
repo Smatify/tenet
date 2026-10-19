@@ -236,6 +236,7 @@ func (em *EntityManager) Flush(ctx context.Context) error {
 		if t, ok := e.ptr.(mapping.CreatedToucher); ok {
 			t.TouchCreated(now)
 		}
+		em.initVersion(e)
 	}
 	run := func(ctx context.Context, db dbal.IDB) error {
 		for i := 0; i < len(ordered); {
@@ -342,6 +343,12 @@ func (em *EntityManager) prepareUpdate(ctx context.Context, e *entry, now time.T
 	}
 	if changed, vals, err = em.changes(e); err != nil || len(changed) == 0 {
 		return nil, err
+	}
+	if v := e.meta.Version; v != nil && !(len(changed) == 1 && changed[0] == v) {
+		em.bumpVersion(e)
+		if changed, vals, err = em.changes(e); err != nil {
+			return nil, err
+		}
 	}
 	return &update{e: e, fields: changed, cs: newChangeSet(e, changed, vals)}, nil
 }
@@ -451,16 +458,31 @@ func nextValSQL(d dialect.Dialect, seq string) string {
 
 func (em *EntityManager) update(ctx context.Context, db dbal.IDB, e *entry, fields []*mapping.Field) error {
 	q := db.NewUpdate().Table(e.meta.Table)
+	versioned := false
 	for _, f := range fields {
 		v, err := em.fieldDBValue(e, f)
 		if err != nil {
 			return err
 		}
 		q.Set(f.Column, v)
+		versioned = versioned || f.Version
 	}
 	em.whereEntity(e, func(c string, args ...any) { q.Where(c, args...) })
-	_, err := q.Exec(ctx)
-	return wrapErr(e.meta, "update", err)
+	var old any
+	if versioned && e.snapshot != nil {
+		old = e.snapshot[e.meta.Version.Pos]
+		q.Where("? = ?", dbal.Ident(e.meta.Version.Column), old)
+	}
+	res, err := q.Exec(ctx)
+	if err != nil {
+		return wrapErr(e.meta, "update", err)
+	}
+	if versioned && e.snapshot != nil {
+		if n, err := res.RowsAffected(); err == nil && n == 0 {
+			return &OptimisticLockError{Entity: e.meta.Name, ID: e.key, Version: old}
+		}
+	}
+	return nil
 }
 
 func (em *EntityManager) nullify(ctx context.Context, db dbal.IDB, e *entry, f *mapping.Field) error {
