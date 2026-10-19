@@ -36,7 +36,7 @@ func TestGeneratedAccessors(t *testing.T) {
 	if post.author != au || a.GetAssoc(post, p.Assoc("author").Pos) != au || a.Header(post) != &post.Entity {
 		t.Fatal("assoc / header")
 	}
-	if PostFields.Title.Name != "title" || AuthorFields.Email.Entity != "Author" {
+	if PostFields.Title.Name != "title" || AuthorFields.Email.Entity != "Author" || AuthorFields.AddressCity.Name != "Address.City" {
 		t.Fatal("field refs")
 	}
 	ae, err := mapping.For[Author](r)
@@ -45,5 +45,22 @@ func TestGeneratedAccessors(t *testing.T) {
 	}
 	if !ae.Accessor().(interface{ New() any }).New().(*Author).Nick.Valid == false {
 		t.Fatal("new author")
+	}
+}
+
+func TestGeneratedEmbeddable(t *testing.T) {
+	r := mapping.NewRegistry()
+	e, err := mapping.For[Author](r)
+	if err != nil {
+		t.Fatal(err)
+	}
+	f := e.Field("Address.City")
+	if f == nil || f.Column != "addr_city" {
+		t.Fatalf("field = %+v", f)
+	}
+	a := &Author{}
+	e.Accessor().Set(a, f.Pos, "Berlin")
+	if a.Address.City != "Berlin" || len(e.StaleGenerated()) != 0 {
+		t.Fatalf("generated embeddable access: %+v %v", a.Address, e.StaleGenerated())
 	}
 }

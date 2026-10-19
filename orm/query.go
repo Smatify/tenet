@@ -145,8 +145,11 @@ func (q *Query) resolve(ref any) (string, *mapping.Field, error) {
 	switch r := ref.(type) {
 	case string:
 		alias, name = RootAlias, r
+		// "alias.Field" or a path into an embeddable ("Billing.City").
 		if i := strings.IndexByte(r, '.'); i >= 0 {
-			alias, name = r[:i], r[i+1:]
+			if _, ok := q.aliases[r[:i]]; ok {
+				alias, name = r[:i], r[i+1:]
+			}
 		}
 	case mapping.FieldRef:
 		alias = ""

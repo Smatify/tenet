@@ -75,6 +75,30 @@ func init() {
 				},
 				Addr: func(p any) any { return &p.(*Author).Prefs },
 			},
+			"Address.Street": {
+				Get: func(p any) any { return p.(*Author).Address.Street },
+				Set: func(p any, v any) {
+					if v == nil {
+						var zero string
+						p.(*Author).Address.Street = zero
+						return
+					}
+					p.(*Author).Address.Street = v.(string)
+				},
+				Addr: func(p any) any { return &p.(*Author).Address.Street },
+			},
+			"Address.City": {
+				Get: func(p any) any { return p.(*Author).Address.City },
+				Set: func(p any, v any) {
+					if v == nil {
+						var zero string
+						p.(*Author).Address.City = zero
+						return
+					}
+					p.(*Author).Address.City = v.(string)
+				},
+				Addr: func(p any) any { return &p.(*Author).Address.City },
+			},
 		},
 		Assocs: map[string]mapping.GeneratedField{
 			"Posts": {
@@ -87,19 +111,23 @@ func init() {
 
 // AuthorFields references the mapped fields of Author in queries.
 var AuthorFields = struct {
-	ID    mapping.FieldRef
-	Email mapping.FieldRef
-	Nick  mapping.FieldRef
-	Born  mapping.FieldRef
-	Prefs mapping.FieldRef
-	Posts mapping.FieldRef
+	ID            mapping.FieldRef
+	Email         mapping.FieldRef
+	Nick          mapping.FieldRef
+	Born          mapping.FieldRef
+	Prefs         mapping.FieldRef
+	AddressStreet mapping.FieldRef
+	AddressCity   mapping.FieldRef
+	Posts         mapping.FieldRef
 }{
-	ID:    mapping.FieldRef{Entity: "Author", Name: "ID"},
-	Email: mapping.FieldRef{Entity: "Author", Name: "Email"},
-	Nick:  mapping.FieldRef{Entity: "Author", Name: "Nick"},
-	Born:  mapping.FieldRef{Entity: "Author", Name: "Born"},
-	Prefs: mapping.FieldRef{Entity: "Author", Name: "Prefs"},
-	Posts: mapping.FieldRef{Entity: "Author", Name: "Posts"},
+	ID:            mapping.FieldRef{Entity: "Author", Name: "ID"},
+	Email:         mapping.FieldRef{Entity: "Author", Name: "Email"},
+	Nick:          mapping.FieldRef{Entity: "Author", Name: "Nick"},
+	Born:          mapping.FieldRef{Entity: "Author", Name: "Born"},
+	Prefs:         mapping.FieldRef{Entity: "Author", Name: "Prefs"},
+	AddressStreet: mapping.FieldRef{Entity: "Author", Name: "Address.Street"},
+	AddressCity:   mapping.FieldRef{Entity: "Author", Name: "Address.City"},
+	Posts:         mapping.FieldRef{Entity: "Author", Name: "Posts"},
 }
 
 func init() {

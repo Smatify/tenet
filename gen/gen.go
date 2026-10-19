@@ -124,7 +124,7 @@ func (g *generator) render() ([]byte, error) {
 			continue
 		}
 		e := entityData{Name: name, Header: header, RefsName: name + "Fields"}
-		g.walk(&e, st, "", "", true)
+		g.walk(&e, st, "", "", true, "")
 		ents = append(ents, e)
 	}
 	if len(ents) == 0 {
@@ -185,7 +185,7 @@ var assocKinds = []string{"manyToOne", "oneToMany", "oneToOne", "manyToMany"}
 
 // walk mirrors mapping's field discovery: header skipped, "-" skipped,
 // untagged embedded structs flattened.
-func (g *generator) walk(e *entityData, st *types.Struct, path, expr string, accessible bool) {
+func (g *generator) walk(e *entityData, st *types.Struct, path, expr string, accessible bool, names string) {
 	for i := range st.NumFields() {
 		f := st.Field(i)
 		if f.Embedded() && isHeader(f.Type()) {
@@ -205,13 +205,19 @@ func (g *generator) walk(e *entityData, st *types.Struct, path, expr string, acc
 		ft := f.Type()
 		if f.Embedded() && !hasTag {
 			if s, isStruct := ft.Underlying().(*types.Struct); isStruct && !isTimeOrScanner(ft) {
-				g.walk(e, s, fpath, fexpr, ok)
+				g.walk(e, s, fpath, fexpr, ok, names)
+				continue
+			}
+		}
+		if hasOption(raw, "embedded") {
+			if s, isStruct := ft.Underlying().(*types.Struct); isStruct {
+				g.walk(e, s, fpath, fexpr, ok, names+f.Name()+".")
 				continue
 			}
 		}
 		isAssoc := false
 		for _, k := range assocKinds {
-			if strings.Contains(","+raw+",", ","+k+",") || strings.HasPrefix(raw, k+",") || raw == k {
+			if hasOption(raw, k) {
 				isAssoc = true
 			}
 		}
@@ -221,7 +227,7 @@ func (g *generator) walk(e *entityData, st *types.Struct, path, expr string, acc
 		if hasMethod(ft, "CollectionElem") || hasMethod(ft, "RefElem") {
 			isAssoc = true
 		}
-		e.Refs = append(e.Refs, refData{Exported: exportName(f.Name(), e.Refs), Name: f.Name()})
+		e.Refs = append(e.Refs, refData{Exported: exportName(strings.ReplaceAll(names, ".", "")+f.Name(), e.Refs), Name: names + f.Name()})
 		if !ok {
 			continue // reflection fallback at runtime
 		}
@@ -329,3 +335,14 @@ var {{$e.RefsName}} = struct {
 {{- end}}
 }
 {{end}}`))
+
+// hasOption reports whether the struct tag value contains option key.
+func hasOption(raw, key string) bool {
+	for _, part := range strings.Split(raw, ",") {
+		k, _, _ := strings.Cut(strings.TrimSpace(part), ":")
+		if k == key {
+			return true
+		}
+	}
+	return false
+}

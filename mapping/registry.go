@@ -147,6 +147,7 @@ var fieldOptions = map[string]bool{
 	"manyToOne": true, "oneToMany": true, "oneToOne": true, "manyToMany": true,
 	"mappedBy": true, "inversedBy": true, "joinColumn": true, "referencedColumn": true,
 	"onDelete": true, "joinTable": true, "cascade": true, "fetch": true, "orphanRemoval": true, "orderBy": true,
+	"embedded": true, "prefix": true, "noprefix": true,
 }
 
 func (r *Registry) parse(t reflect.Type) (*Entity, error) {
@@ -179,7 +180,7 @@ func (r *Registry) parse(t reflect.Type) (*Entity, error) {
 	e.Comment = Unquote(tag.Get("comment"))
 	e.Sequence = tag.Get("sequence")
 
-	if err := r.walk(e, t, nil); err != nil {
+	if err := r.walk(e, t, nil, embedCtx{}); err != nil {
 		return nil, err
 	}
 	if len(e.ID) == 0 {
@@ -266,8 +267,15 @@ func isAssocTag(tag Tag) (AssocKind, bool) {
 	return 0, false
 }
 
+// embedCtx carries the column and Go name prefixes of an embeddable.
+type embedCtx struct {
+	column string // column prefix, e.g. "billing_"
+	name   string // Go path prefix, e.g. "Billing."
+	field  string // embedded field name for error messages
+}
+
 // walk collects fields of t (and anonymous embedded structs) into e.
-func (r *Registry) walk(e *Entity, t reflect.Type, prefix []int) error {
+func (r *Registry) walk(e *Entity, t reflect.Type, prefix []int, emb embedCtx) error {
 	for i := range t.NumField() {
 		sf := t.Field(i)
 		index := append(slices.Clone(prefix), i)
@@ -289,10 +297,35 @@ func (r *Registry) walk(e *Entity, t reflect.Type, prefix []int) error {
 		}
 		ft := sf.Type
 		if sf.Anonymous && ft.Kind() == reflect.Struct && ft != timeType && !types.IsValuerScanner(ft) && !hasTag {
-			if err := r.walk(e, ft, index); err != nil {
+			if err := r.walk(e, ft, index, emb); err != nil {
 				return err
 			}
 			continue
+		}
+		if tag.Has("embedded") {
+			if ft.Kind() != reflect.Struct || IsEntity(ft) {
+				return &MappingError{Entity: e.Name, Field: emb.name + sf.Name, Msg: "embedded fields must be (non-entity) struct values"}
+			}
+			sub := embedCtx{column: emb.column, name: emb.name + sf.Name + ".", field: emb.name + sf.Name}
+			switch {
+			case tag.Has("noprefix"):
+			case tag.Get("prefix") != "":
+				sub.column += tag.Get("prefix")
+			default:
+				sub.column += r.naming.ColumnName(sf.Name) + "_"
+			}
+			if err := r.walk(e, ft, index, sub); err != nil {
+				return err
+			}
+			continue
+		}
+		if tag.Has("prefix") || tag.Has("noprefix") {
+			return &MappingError{Entity: e.Name, Field: emb.name + sf.Name, Msg: "prefix and noprefix need embedded"}
+		}
+		if _, ok := isAssocTag(tag); ok || isEntityContainer(ft) {
+			if emb.field != "" {
+				return &MappingError{Entity: e.Name, Field: emb.name + sf.Name, Msg: "associations inside embeddables are not supported"}
+			}
 		}
 		if kind, ok := isAssocTag(tag); ok {
 			if err := r.parseAssoc(e, sf, index, tag, kind); err != nil {
@@ -306,7 +339,10 @@ func (r *Registry) walk(e *Entity, t reflect.Type, prefix []int) error {
 			}
 			continue
 		}
-		f, err := r.parseField(e, sf, index, tag)
+		if emb.field != "" && (tag.Has("id") || tag.Has("pk")) {
+			return &MappingError{Entity: e.Name, Field: emb.name + sf.Name, Msg: "identifiers inside embeddables are not supported"}
+		}
+		f, err := r.parseField(e, sf, index, tag, emb)
 		if err != nil {
 			return err
 		}
@@ -322,15 +358,16 @@ func isEntityContainer(t reflect.Type) bool {
 	return t.Implements(collectionIface) || t.Implements(refIface)
 }
 
-func (r *Registry) parseField(e *Entity, sf reflect.StructField, index []int, tag Tag) (*Field, error) {
+func (r *Registry) parseField(e *Entity, sf reflect.StructField, index []int, tag Tag, emb embedCtx) (*Field, error) {
 	errf := func(format string, args ...any) error {
 		return &MappingError{Entity: e.Name, Field: sf.Name, Msg: fmt.Sprintf(format, args...)}
 	}
-	f := &Field{Name: sf.Name, Index: index, GoType: sf.Type, Exported: sf.IsExported()}
+	f := &Field{Name: emb.name + sf.Name, Index: index, GoType: sf.Type, Exported: sf.IsExported()}
 	f.Column = tag.Get("column")
 	if f.Column == "" {
 		f.Column = r.naming.ColumnName(sf.Name)
 	}
+	f.Column = emb.column + f.Column
 	var typeName types.Name
 	if tn := tag.Get("type"); tn != "" {
 		typeName = types.Name(tn)

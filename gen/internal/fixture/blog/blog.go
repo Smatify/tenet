@@ -23,6 +23,7 @@ type Author struct {
 	Nick         sql.NullString
 	Born         *time.Time
 	Prefs        map[string]any
+	Address      Address    `smorm:"embedded,prefix:addr_"`
 	Posts        List[Post] `smorm:"oneToMany,mappedBy:author"`
 	cache        int        `smorm:"-"`
 }
@@ -44,3 +45,9 @@ type Meta struct {
 
 // NotAnEntity must be ignored.
 type NotAnEntity struct{ A int }
+
+// Address is an embeddable value object.
+type Address struct {
+	Street string
+	City   string
+}
