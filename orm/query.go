@@ -213,6 +213,9 @@ func (q *Query) build(count bool) (*dbal.SelectQuery, error) {
 		}
 		inner.WhereExpr(e)
 	}
+	for _, c := range em.filterConds(meta, RootAlias) {
+		inner.WhereExpr(c)
+	}
 	idCol := ""
 	if id := meta.SingleID(); id != nil {
 		idCol = RootAlias + "." + id.Column
@@ -265,21 +268,32 @@ func (q *Query) appendJoin(s *dbal.SelectQuery, j queryJoin) error {
 		join = s.LeftJoin
 	}
 	col := func(alias, c string) dbal.Ident { return dbal.Ident(alias + "." + c) }
+	// Filters of the joined entity become part of the ON clause, so LEFT
+	// JOINs keep their semantics.
+	on := "? = ?"
+	var extra []any
+	for _, c := range q.em.filterConds(a.Target, j.alias) {
+		on += " AND ?"
+		extra = append(extra, c)
+	}
+	target := func(left, right dbal.Ident) {
+		join(a.Target.Table, j.alias, on, append([]any{left, right}, extra...)...)
+	}
 	switch {
 	case a.Kind.IsToOne() && a.Owning:
 		jc := a.JoinColumns[0]
-		join(a.Target.Table, j.alias, "? = ?", col(j.alias, jc.Referenced), col(j.from, jc.Name))
+		target(col(j.alias, jc.Referenced), col(j.from, jc.Name))
 	case a.Kind.IsToOne(): // inverse oneToOne
 		jc := a.Inverse().JoinColumns[0]
-		join(a.Target.Table, j.alias, "? = ?", col(j.alias, jc.Name), col(j.from, jc.Referenced))
+		target(col(j.alias, jc.Name), col(j.from, jc.Referenced))
 	case a.Kind == mapping.OneToMany:
 		spec := toManySpec(a)
-		join(a.Target.Table, j.alias, "? = ?", col(j.alias, spec.ownerCol), col(j.from, spec.ownerRef.Column))
+		target(col(j.alias, spec.ownerCol), col(j.from, spec.ownerRef.Column))
 	default:
 		spec := toManySpec(a)
 		jt := j.alias + "_jt"
 		join(spec.table, jt, "? = ?", col(jt, spec.ownerCol), col(j.from, spec.ownerRef.Column))
-		join(a.Target.Table, j.alias, "? = ?", col(j.alias, spec.targetRef.Column), col(jt, spec.targetCol))
+		target(col(j.alias, spec.targetRef.Column), col(jt, spec.targetCol))
 	}
 	return nil
 }

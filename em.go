@@ -74,3 +74,16 @@ func FindLocked[T any](ctx context.Context, em *EntityManager, mode LockMode, id
 	}
 	return v.(*T), nil
 }
+
+// Filters.
+type (
+	Filter        = orm.Filter
+	FilterFunc    = orm.FilterFunc
+	SoftDeletable = orm.SoftDeletable
+)
+
+// ColumnFilter restricts entities having column to rows where it equals value.
+var ColumnFilter = orm.ColumnFilter
+
+// SoftDeleteFilterName names the built-in soft delete filter.
+const SoftDeleteFilterName = orm.SoftDeleteFilterName

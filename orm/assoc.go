@@ -83,8 +83,19 @@ func applyOrderBy(q *dbal.SelectQuery, a *mapping.Association) {
 // countCollection counts a to-many association without loading it.
 func (em *EntityManager) countCollection(ctx context.Context, owner *entry, a *mapping.Association) (int, error) {
 	spec := toManySpec(a)
-	return em.db.NewSelect().Table(spec.table).
-		Where("? = ?", dbal.Ident(spec.ownerCol), refArg(owner.meta, spec.ownerRef, owner.ptr)).Count(ctx)
+	q := em.db.NewSelect().Table(spec.table).
+		Where("? = ?", dbal.Ident(spec.ownerCol), refArg(owner.meta, spec.ownerRef, owner.ptr))
+	if a.Kind == mapping.OneToMany {
+		for _, c := range em.filterConds(a.Target, "") {
+			q.WhereExpr(c)
+		}
+	} else if conds := em.filterConds(a.Target, "t"); len(conds) > 0 {
+		q.InnerJoin(a.Target.Table, "t", "? = ?", dbal.Ident("t."+spec.targetRef.Column), dbal.Ident(spec.table+"."+spec.targetCol))
+		for _, c := range conds {
+			q.WhereExpr(c)
+		}
+	}
+	return q.Count(ctx)
 }
 
 // wireCollections attaches fresh, uninitialized collection states to a

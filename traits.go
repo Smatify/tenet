@@ -56,3 +56,30 @@ func (t *Timestamps) TouchCreated(now time.Time) {
 
 // TouchUpdated implements mapping.UpdatedToucher.
 func (t *Timestamps) TouchUpdated(now time.Time) { t.updatedAt = now }
+
+// SoftDelete is a trait for entities that are marked as deleted instead of
+// being removed. EntityManager.Remove sets deleted_at; removing an already
+// soft-deleted entity deletes it for real. The built-in "softdelete" filter
+// hides deleted rows from all queries (disable it with
+// em.Filters().Disable(smorm.SoftDeleteFilterName)).
+type SoftDelete struct {
+	deletedAt *time.Time `smorm:"column:deleted_at"`
+}
+
+// DeletedAt returns when the entity was soft-deleted (nil if it was not).
+func (s *SoftDelete) DeletedAt() *time.Time { return s.deletedAt }
+
+// IsDeleted reports whether the entity is soft-deleted.
+func (s *SoftDelete) IsDeleted() bool { return s.deletedAt != nil }
+
+// Restore clears the deletion mark (flush to persist it).
+func (s *SoftDelete) Restore() { s.deletedAt = nil }
+
+// MarkDeleted implements orm.SoftDeletable.
+func (s *SoftDelete) MarkDeleted(now time.Time) {
+	t := now.UTC().Truncate(time.Microsecond)
+	s.deletedAt = &t
+}
+
+// DeletedColumn implements orm.SoftDeletable.
+func (s *SoftDelete) DeletedColumn() string { return "deleted_at" }

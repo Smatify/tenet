@@ -169,6 +169,7 @@ type update struct {
 	e      *entry
 	fields []*mapping.Field
 	cs     *ChangeSet
+	soft   bool // soft delete: the entity is forgotten after the flush
 }
 
 // Flush writes all pending inserts, updates and deletes in one transaction.
@@ -202,6 +203,22 @@ func (em *EntityManager) Flush(ctx context.Context) error {
 		case StateRemoved:
 			if err := em.lifecycle(ctx, EventPreRemove, e, nil); err != nil {
 				return err
+			}
+			if sd, ok := e.ptr.(SoftDeletable); ok {
+				if !e.initialized {
+					if err := em.initialize(ctx, e); err != nil {
+						return err
+					}
+				}
+				if !sd.IsDeleted() {
+					sd.MarkDeleted(now)
+					changed, vals, err := em.changes(e)
+					if err != nil {
+						return err
+					}
+					updates = append(updates, update{e: e, fields: changed, cs: newChangeSet(e, changed, vals), soft: true})
+					continue
+				}
 			}
 			removes = append(removes, e)
 		case StateManaged:
@@ -271,7 +288,11 @@ func (em *EntityManager) Flush(ctx context.Context) error {
 			if err := em.update(ctx, db, u.e, u.fields); err != nil {
 				return err
 			}
-			if err := em.lifecycle(ctx, EventPostUpdate, u.e, u.cs); err != nil {
+			ev := EventPostUpdate
+			if u.soft {
+				ev = EventPostRemove
+			}
+			if err := em.lifecycle(ctx, ev, u.e, u.cs); err != nil {
 				return err
 			}
 		}
@@ -317,6 +338,10 @@ func (em *EntityManager) Flush(ctx context.Context) error {
 	}
 	em.syncCollectionSnapshots()
 	for _, u := range updates {
+		if u.soft {
+			em.forget(u.e)
+			continue
+		}
 		if err := em.takeSnapshot(u.e); err != nil {
 			return err
 		}

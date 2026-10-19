@@ -25,6 +25,7 @@ type EntityManager struct {
 	events    *EventManager
 	ctx       context.Context
 	batchSize int
+	filters   *Filters
 }
 
 // Option configures an EntityManager.
@@ -39,7 +40,7 @@ func WithClock(now func() time.Time) Option { return func(em *EntityManager) { e
 // New returns an entity manager working on db (a *dbal.DB, *dbal.Conn or *dbal.Tx).
 func New(db dbal.IDB, opts ...Option) *EntityManager {
 	em := &EntityManager{db: db, reg: mapping.Default, now: time.Now, identity: map[*mapping.Entity]map[any]*entry{}, events: NewEventManager(),
-		ctx: context.Background(), batchSize: DefaultBatchSize}
+		ctx: context.Background(), batchSize: DefaultBatchSize, filters: newFilters()}
 	for _, o := range opts {
 		o(em)
 	}

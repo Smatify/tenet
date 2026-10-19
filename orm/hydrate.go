@@ -57,6 +57,9 @@ func (em *EntityManager) selectEntity(meta *mapping.Entity, alias string) *dbal.
 func (em *EntityManager) loadWhere(ctx context.Context, meta *mapping.Entity, where func(*dbal.SelectQuery), limit int, into ...*entry) ([]any, error) {
 	q := em.selectEntity(meta, "")
 	where(q)
+	for _, c := range em.filterConds(meta, "") {
+		q.WhereExpr(c)
+	}
 	if limit > 0 {
 		q.Limit(limit)
 	}
