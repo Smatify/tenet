@@ -194,13 +194,18 @@ func (q *Query) resolve(ref any) (string, *mapping.Field, error) {
 }
 
 // build renders the query. countOnly selects COUNT instead of entities.
-func (q *Query) build(count bool) (*dbal.SelectQuery, error) {
+func (q *Query) build(count bool) (*dbal.SelectQuery, error) { return q.buildMode(count, false) }
+
+// buildMode renders the query; refs selects only identifier and
+// discriminator (for polymorphic queries).
+func (q *Query) buildMode(count, refs bool) (*dbal.SelectQuery, error) {
 	if q.err != nil {
 		return nil, q.err
 	}
 	em, meta := q.em, q.meta
 	wrap := q.hasToManyJoin() && meta.SingleID() != nil
-	inner := em.db.NewSelect().TableAs(meta.Table, RootAlias)
+	inner := em.db.NewSelect()
+	em.fromEntity(inner, meta, RootAlias)
 	for _, j := range q.joins {
 		if err := q.appendJoin(inner, j); err != nil {
 			return nil, err
@@ -213,7 +218,7 @@ func (q *Query) build(count bool) (*dbal.SelectQuery, error) {
 		}
 		inner.WhereExpr(e)
 	}
-	for _, c := range em.filterConds(meta, RootAlias) {
+	for _, c := range append(em.filterConds(meta, RootAlias), classConds(meta, RootAlias, !meta.IsPolymorphic())...) {
 		inner.WhereExpr(c)
 	}
 	idCol := ""
@@ -232,10 +237,18 @@ func (q *Query) build(count bool) (*dbal.SelectQuery, error) {
 		return inner, nil
 	}
 	var out *dbal.SelectQuery
-	if wrap {
+	switch {
+	case wrap && refs:
+		inner.Column(idCol)
+		out = em.db.NewSelect().Column(idCol, RootAlias+"."+meta.DiscriminatorColumn)
+		em.fromEntity(out, meta, RootAlias)
+		out.Where("? IN ?", dbal.Ident(idCol), inner)
+	case wrap:
 		inner.Column(idCol)
 		out = em.selectEntity(meta, RootAlias).Where("? IN ?", dbal.Ident(idCol), inner)
-	} else {
+	case refs:
+		out = inner.Column(idCol, RootAlias+"."+meta.DiscriminatorColumn)
+	default:
 		out = inner
 		for _, f := range meta.Fields {
 			out.Column(RootAlias + "." + f.Column)
@@ -272,12 +285,17 @@ func (q *Query) appendJoin(s *dbal.SelectQuery, j queryJoin) error {
 	// JOINs keep their semantics.
 	on := "? = ?"
 	var extra []any
-	for _, c := range q.em.filterConds(a.Target, j.alias) {
+	for _, c := range append(q.em.filterConds(a.Target, j.alias), classConds(a.Target, j.alias, false)...) {
 		on += " AND ?"
 		extra = append(extra, c)
 	}
+	kind := "INNER JOIN"
+	if j.left {
+		kind = "LEFT JOIN"
+	}
 	target := func(left, right dbal.Ident) {
-		join(a.Target.Table, j.alias, on, append([]any{left, right}, extra...)...)
+		args := append([]any{q.em.source(a.Target), dbal.Ident(j.alias), left, right}, extra...)
+		s.Join(kind+" ? AS ? ON "+on, args...)
 	}
 	switch {
 	case a.Kind.IsToOne() && a.Owning:
@@ -312,11 +330,29 @@ func (q *Query) All(ctx context.Context) ([]any, error) {
 	if q.em.closed {
 		return nil, ErrClosed
 	}
+	var res []any
+	if q.meta != nil && q.meta.IsPolymorphic() {
+		s, err := q.buildMode(false, true)
+		if err != nil {
+			return nil, err
+		}
+		refs, err := q.em.scanRefs(ctx, s, q.meta.SingleID())
+		if err != nil {
+			return nil, err
+		}
+		if res, err = q.em.loadRefs(ctx, q.meta, refs); err != nil {
+			return nil, err
+		}
+		if len(q.with) == 0 || len(res) == 0 {
+			return res, nil
+		}
+		return res, q.em.Preload(ctx, res, q.with...)
+	}
 	s, err := q.build(false)
 	if err != nil {
 		return nil, err
 	}
-	res, err := q.em.loadQuery(ctx, q.meta, s, nil)
+	res, err = q.em.loadQuery(ctx, q.meta, s, nil)
 	if err != nil || len(q.with) == 0 || len(res) == 0 {
 		return res, err
 	}
@@ -358,6 +394,19 @@ func (q *Query) Exists(ctx context.Context) (bool, error) {
 // Preloading (With) is not applied.
 func (q *Query) Iterate(ctx context.Context) iter.Seq2[any, error] {
 	return func(yield func(any, error) bool) {
+		if q.meta != nil && q.meta.IsPolymorphic() {
+			res, err := q.All(ctx)
+			if err != nil {
+				yield(nil, err)
+				return
+			}
+			for _, v := range res {
+				if !yield(v, nil) {
+					return
+				}
+			}
+			return
+		}
 		s, err := q.build(false)
 		if err != nil {
 			yield(nil, err)

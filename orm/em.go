@@ -68,6 +68,15 @@ func (em *EntityManager) meta(ptr any) (*mapping.Entity, error) {
 	return em.reg.Get(rv.Type())
 }
 
+func entryFromPtr(ptr any) (*entry, bool) {
+	h := entity.Of(ptr)
+	if h == nil {
+		return nil, false
+	}
+	e, ok := entity.State(h).(*entry)
+	return e, ok
+}
+
 // entryOf returns the state of ptr in this entity manager, or nil if unknown.
 func (em *EntityManager) entryOf(meta *mapping.Entity, ptr any) *entry {
 	h := meta.Accessor().Header(ptr)
@@ -85,10 +94,10 @@ func (em *EntityManager) attach(meta *mapping.Entity, ptr any, state State) *ent
 }
 
 func (em *EntityManager) register(e *entry, key any) {
-	m := em.identity[e.meta]
+	m := em.identity[e.meta.Root]
 	if m == nil {
 		m = map[any]*entry{}
-		em.identity[e.meta] = m
+		em.identity[e.meta.Root] = m
 	}
 	e.key = key
 	m[key] = e
@@ -96,13 +105,13 @@ func (em *EntityManager) register(e *entry, key any) {
 
 func (em *EntityManager) unregister(e *entry) {
 	if e.key != nil {
-		delete(em.identity[e.meta], e.key)
+		delete(em.identity[e.meta.Root], e.key)
 		e.key = nil
 	}
 }
 
 func (em *EntityManager) lookup(meta *mapping.Entity, key any) *entry {
-	return em.identity[meta][key]
+	return em.identity[meta.Root][key]
 }
 
 // State returns the state of ptr.
@@ -165,11 +174,11 @@ func (em *EntityManager) Find(ctx context.Context, t reflect.Type, id ...any) (a
 		return nil, fmt.Errorf("%s: Find needs %d identifier values, got %d", meta.Name, len(meta.ID), len(id))
 	}
 	if e := em.lookup(meta, idKey(id)); e != nil {
-		if e.state == StateRemoved {
+		if e.state == StateRemoved || !isA(e.meta, meta) {
 			return nil, ErrNotFound
 		}
 		if e.initialized {
-			return e.ptr, nil
+			return view(e, meta), nil
 		}
 	}
 	res, err := em.loadWhere(ctx, meta, func(q *dbal.SelectQuery) { whereID(q, meta, "", id) }, 1)
@@ -193,12 +202,21 @@ func (em *EntityManager) Reference(t reflect.Type, id ...any) (any, error) {
 	if len(id) != len(meta.ID) {
 		return nil, fmt.Errorf("%s: Reference needs %d identifier values, got %d", meta.Name, len(meta.ID), len(id))
 	}
+	if meta.IsPolymorphic() {
+		if e := em.lookup(meta, idKey(id)); e != nil && isA(e.meta, meta) {
+			return view(e, meta), nil
+		}
+		return nil, fmt.Errorf("%s has subclasses; a reference cannot know its class, use Find", meta.Name)
+	}
 	return em.reference(meta, id), nil
 }
 
 func (em *EntityManager) reference(meta *mapping.Entity, id []any) any {
 	key := idKey(id)
 	if e := em.lookup(meta, key); e != nil {
+		if isA(e.meta, meta) {
+			return view(e, meta)
+		}
 		return e.ptr
 	}
 	acc := meta.Accessor()

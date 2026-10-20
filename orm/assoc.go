@@ -165,7 +165,10 @@ func (em *EntityManager) scheduleOrphans() error {
 				if old == nil || equalDB(old, now) {
 					continue
 				}
-				for _, cand := range em.identity[a.Target] {
+				for _, cand := range em.identity[a.Target.Root] {
+					if !isA(cand.meta, a.Target) {
+						continue
+					}
 					tf := a.Target.FieldByColumn(a.JoinColumns[0].Referenced)
 					v, err := tf.Type.ToDatabase(a.Target.Accessor().Get(cand.ptr, tf.Pos), em.db.Dialect().Name())
 					if err == nil && equalDB(v, old) && cand.state == StateManaged {

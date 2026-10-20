@@ -87,3 +87,7 @@ var ColumnFilter = orm.ColumnFilter
 
 // SoftDeleteFilterName names the built-in soft delete filter.
 const SoftDeleteFilterName = orm.SoftDeleteFilterName
+
+// Concrete returns the full instance behind an entity pointer, e.g. the
+// *Car behind a *Vehicle from a polymorphic query (use a type switch).
+func Concrete(ptr any) any { return orm.Concrete(ptr) }

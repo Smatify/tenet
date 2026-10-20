@@ -72,7 +72,10 @@ func (em *EntityManager) initialize(ctx context.Context, e *entry) error {
 		return em.refresh(ctx, e)
 	}
 	batch := []*entry{e}
-	for _, other := range em.identity[e.meta] {
+	for _, other := range em.identity[e.meta.Root] {
+		if other.meta != e.meta {
+			continue
+		}
 		if len(batch) >= em.batchSize {
 			break
 		}

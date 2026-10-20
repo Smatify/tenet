@@ -38,6 +38,19 @@ type Post struct {
 	meta   Meta    `smorm:"type:json"`
 }
 
+// Content is the root of a single table hierarchy.
+type Content struct {
+	smorm.Entity `smorm:"inheritance:single"`
+	ID           int64
+	Title        string
+}
+
+// Video is a subclass of Content.
+type Video struct {
+	Content `smorm:"discriminatorValue:video"`
+	Seconds int
+}
+
 // Meta is a plain embedded value stored as JSON.
 type Meta struct {
 	Tags []string

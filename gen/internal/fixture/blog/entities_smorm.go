@@ -131,6 +131,49 @@ var AuthorFields = struct {
 }
 
 func init() {
+	mapping.RegisterGenerated(reflect.TypeFor[Content](), mapping.GeneratedType{
+		New:    func() any { return new(Content) },
+		Header: func(p any) *smorm.Entity { return &p.(*Content).Entity },
+		Fields: map[string]mapping.GeneratedField{
+			"ID": {
+				Get: func(p any) any { return p.(*Content).ID },
+				Set: func(p any, v any) {
+					if v == nil {
+						var zero int64
+						p.(*Content).ID = zero
+						return
+					}
+					p.(*Content).ID = v.(int64)
+				},
+				Addr: func(p any) any { return &p.(*Content).ID },
+			},
+			"Title": {
+				Get: func(p any) any { return p.(*Content).Title },
+				Set: func(p any, v any) {
+					if v == nil {
+						var zero string
+						p.(*Content).Title = zero
+						return
+					}
+					p.(*Content).Title = v.(string)
+				},
+				Addr: func(p any) any { return &p.(*Content).Title },
+			},
+		},
+		Assocs: map[string]mapping.GeneratedField{},
+	})
+}
+
+// ContentFields references the mapped fields of Content in queries.
+var ContentFields = struct {
+	ID    mapping.FieldRef
+	Title mapping.FieldRef
+}{
+	ID:    mapping.FieldRef{Entity: "Content", Name: "ID"},
+	Title: mapping.FieldRef{Entity: "Content", Name: "Title"},
+}
+
+func init() {
 	mapping.RegisterGenerated(reflect.TypeFor[Post](), mapping.GeneratedType{
 		New:    func() any { return new(Post) },
 		Header: func(p any) *smorm.Entity { return &p.(*Post).Entity },
@@ -184,4 +227,61 @@ var PostFields = struct {
 	Title:     mapping.FieldRef{Entity: "Post", Name: "title"},
 	Author:    mapping.FieldRef{Entity: "Post", Name: "author"},
 	Meta:      mapping.FieldRef{Entity: "Post", Name: "meta"},
+}
+
+func init() {
+	mapping.RegisterGenerated(reflect.TypeFor[Video](), mapping.GeneratedType{
+		New:    func() any { return new(Video) },
+		Header: func(p any) *smorm.Entity { return &p.(*Video).Content.Entity },
+		Fields: map[string]mapping.GeneratedField{
+			"Content.ID": {
+				Get: func(p any) any { return p.(*Video).Content.ID },
+				Set: func(p any, v any) {
+					if v == nil {
+						var zero int64
+						p.(*Video).Content.ID = zero
+						return
+					}
+					p.(*Video).Content.ID = v.(int64)
+				},
+				Addr: func(p any) any { return &p.(*Video).Content.ID },
+			},
+			"Content.Title": {
+				Get: func(p any) any { return p.(*Video).Content.Title },
+				Set: func(p any, v any) {
+					if v == nil {
+						var zero string
+						p.(*Video).Content.Title = zero
+						return
+					}
+					p.(*Video).Content.Title = v.(string)
+				},
+				Addr: func(p any) any { return &p.(*Video).Content.Title },
+			},
+			"Seconds": {
+				Get: func(p any) any { return p.(*Video).Seconds },
+				Set: func(p any, v any) {
+					if v == nil {
+						var zero int
+						p.(*Video).Seconds = zero
+						return
+					}
+					p.(*Video).Seconds = v.(int)
+				},
+				Addr: func(p any) any { return &p.(*Video).Seconds },
+			},
+		},
+		Assocs: map[string]mapping.GeneratedField{},
+	})
+}
+
+// VideoFields references the mapped fields of Video in queries.
+var VideoFields = struct {
+	ID      mapping.FieldRef
+	Title   mapping.FieldRef
+	Seconds mapping.FieldRef
+}{
+	ID:      mapping.FieldRef{Entity: "Video", Name: "ID"},
+	Title:   mapping.FieldRef{Entity: "Video", Name: "Title"},
+	Seconds: mapping.FieldRef{Entity: "Video", Name: "Seconds"},
 }

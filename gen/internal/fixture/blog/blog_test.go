@@ -64,3 +64,23 @@ func TestGeneratedEmbeddable(t *testing.T) {
 		t.Fatalf("generated embeddable access: %+v %v", a.Address, e.StaleGenerated())
 	}
 }
+
+func TestGeneratedSubclass(t *testing.T) {
+	r := mapping.NewRegistry()
+	v, err := mapping.For[Video](r)
+	if err != nil {
+		t.Fatal(err)
+	}
+	vid := &Video{}
+	v.Accessor().Set(vid, v.Field("Title").Pos, "intro")
+	v.Accessor().Set(vid, v.Field("Seconds").Pos, 90)
+	if vid.Title != "intro" || vid.Seconds != 90 || !v.Generated || len(v.StaleGenerated()) != 0 {
+		t.Fatalf("subclass accessors: %+v %v", vid, v.StaleGenerated())
+	}
+	if v.Accessor().Header(vid) != &vid.Entity {
+		t.Fatal("header")
+	}
+	if VideoFields.Seconds.Name != "Seconds" {
+		t.Fatal("refs")
+	}
+}

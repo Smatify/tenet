@@ -114,12 +114,7 @@ func (g *generator) render() ([]byte, error) {
 		if !ok {
 			continue
 		}
-		header := ""
-		for i := range st.NumFields() {
-			if f := st.Field(i); f.Embedded() && isHeader(f.Type()) {
-				header = f.Name()
-			}
-		}
+		header := headerPath(st)
 		if header == "" {
 			continue
 		}
@@ -170,15 +165,29 @@ func hasMethod(t types.Type, name string) bool {
 
 func isEntityType(t types.Type) bool {
 	st, ok := t.Underlying().(*types.Struct)
-	if !ok {
-		return false
-	}
+	return ok && headerPath(st) != ""
+}
+
+// headerPath returns the selector path to the entity header ("Entity", or
+// "vehicle.Entity" for subclasses embedding their parent entity).
+func headerPath(st *types.Struct) string {
 	for i := range st.NumFields() {
 		if f := st.Field(i); f.Embedded() && isHeader(f.Type()) {
-			return true
+			return f.Name()
 		}
 	}
-	return false
+	for i := range st.NumFields() {
+		f := st.Field(i)
+		if !f.Embedded() {
+			continue
+		}
+		if sub, ok := f.Type().Underlying().(*types.Struct); ok {
+			if p := headerPath(sub); p != "" {
+				return f.Name() + "." + p
+			}
+		}
+	}
+	return ""
 }
 
 var assocKinds = []string{"manyToOne", "oneToMany", "oneToOne", "manyToMany"}
@@ -203,7 +212,7 @@ func (g *generator) walk(e *entityData, st *types.Struct, path, expr string, acc
 		fexpr := expr + "." + f.Name()
 		ok := accessible && (f.Exported() || f.Pkg() == g.pkg)
 		ft := f.Type()
-		if f.Embedded() && !hasTag {
+		if f.Embedded() && (!hasTag || isEntityType(ft)) {
 			if s, isStruct := ft.Underlying().(*types.Struct); isStruct && !isTimeOrScanner(ft) {
 				g.walk(e, s, fpath, fexpr, ok, names)
 				continue
