@@ -233,3 +233,13 @@ func (r *Repository[T]) criteriaQuery(criteria Criteria, opts []FindOption) *Que
 	}
 	return q
 }
+
+// ResultSetMapping maps native result columns to entity columns.
+type ResultSetMapping = orm.ResultSetMapping
+
+// Native runs a hand written SQL query (? placeholders) and hydrates T from
+// its rows; see orm.EntityManager.NativeQuery. rsm may be nil.
+func Native[T any](ctx context.Context, em *EntityManager, rsm *ResultSetMapping, sql string, args ...any) ([]*T, error) {
+	res, err := em.NativeQuery(ctx, reflect.TypeFor[T](), rsm, sql, args...)
+	return typed[T](res), err
+}

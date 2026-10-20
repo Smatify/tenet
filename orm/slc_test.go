@@ -36,3 +36,27 @@ func TestAssign(t *testing.T) {
 		}
 	}
 }
+
+func TestAssignText(t *testing.T) {
+	var i int64
+	var u uint8
+	var f float64
+	var b bool
+	var tm time.Time
+	for _, c := range []struct{ dest, src any }{{&i, []byte("42")}, {&u, []byte("7")}, {&f, []byte("1.5")}, {&b, []byte("1")}, {&tm, []byte("2026-01-02T03:04:05Z")}} {
+		if err := assign(c.dest, c.src); err != nil {
+			t.Fatalf("assign(%T): %v", c.dest, err)
+		}
+	}
+	if i != 42 || u != 7 || f != 1.5 || !b || tm.Year() != 2026 {
+		t.Fatal("values")
+	}
+	for _, d := range []any{&i, &u, &f, &b} {
+		if err := assign(d, []byte("x")); err == nil {
+			t.Errorf("%T: expected parse error", d)
+		}
+	}
+	if normalizeText([]byte("a")) != "a" || normalizeText(1) != 1 {
+		t.Fatal("normalizeText")
+	}
+}

@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
+	"strconv"
 	"time"
 
 	"github.com/smatify/smorm/cache"
@@ -133,6 +134,10 @@ func assignValue(dest reflect.Value, src any) error {
 		elem.Set(n)
 		return nil
 	}
+	if b, ok := src.([]byte); ok && elem.Kind() != reflect.Slice && elem.Kind() != reflect.String {
+		// Text protocol values (e.g. MySQL without bind arguments).
+		return assignText(elem, string(b))
+	}
 	sv := reflect.ValueOf(src)
 	switch {
 	case sv.Type().AssignableTo(elem.Type()):
@@ -149,6 +154,38 @@ func assignValue(dest reflect.Value, src any) error {
 		elem.Set(reflect.ValueOf(t))
 	default:
 		return fmt.Errorf("cannot assign %T to %s", src, elem.Type())
+	}
+	return nil
+}
+
+func assignText(elem reflect.Value, s string) error {
+	switch {
+	case elem.CanInt():
+		n, err := strconv.ParseInt(s, 10, 64)
+		if err != nil {
+			return err
+		}
+		elem.SetInt(n)
+	case elem.CanUint():
+		n, err := strconv.ParseUint(s, 10, 64)
+		if err != nil {
+			return err
+		}
+		elem.SetUint(n)
+	case elem.CanFloat():
+		f, err := strconv.ParseFloat(s, 64)
+		if err != nil {
+			return err
+		}
+		elem.SetFloat(f)
+	case elem.Kind() == reflect.Bool:
+		b, err := strconv.ParseBool(s)
+		if err != nil {
+			return err
+		}
+		elem.SetBool(b)
+	default:
+		return assignValue(elem.Addr(), s)
 	}
 	return nil
 }
