@@ -6,6 +6,7 @@ use (
 	.
 	./gen
 	./examples/blog
+	./extra/smormotel
 	./dialect/mssqldialect
 	./dialect/mysqldialect
 	./dialect/pgdialect
