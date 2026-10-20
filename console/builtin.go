@@ -15,7 +15,7 @@ import (
 )
 
 func builtinCommands() []Command {
-	return []Command{migrateCmd(), statusCmd(), executeCmd(), generateCmd(), diffCmd(), validateCmd(), updateCmd(), fixturesCmd()}
+	return []Command{migrateCmd(), rollbackCmd(), statusCmd(), executeCmd(), generateCmd(), diffCmd(), validateCmd(), updateCmd(), fixturesCmd()}
 }
 
 // ignore combines the configured filter with the migrator's own tables.
@@ -384,6 +384,34 @@ func fixturesCmd() Command {
 				c.Printf("  > loading %s\n", n)
 			}
 			c.Success(fmt.Sprintf("Loaded %d fixture(s).", len(done)))
+			return nil
+		},
+	}
+}
+
+func rollbackCmd() Command {
+	var dry *bool
+	return Command{
+		Name:        "migrations:rollback",
+		Description: "Revert all migrations executed by the last migrate run",
+		Flags:       func(fs *flag.FlagSet) { dry = fs.Bool("dry-run", false, "show the SQL without executing it") },
+		Run: func(ctx context.Context, c *Ctx) error {
+			m, err := c.App.Migrator()
+			if err != nil {
+				return err
+			}
+			if !*dry && c.Interactive && !c.Confirm("WARNING! You are about to revert the last group of migrations. Are you sure?", false) {
+				c.Printf("\n [CANCELLED] Rollback cancelled!\n")
+				return nil
+			}
+			steps, err := m.Rollback(ctx, *dry)
+			printSteps(c, steps, *dry)
+			if err != nil {
+				return err
+			}
+			if !*dry {
+				c.Success(fmt.Sprintf("Reverted %d migration(s).", len(steps)))
+			}
 			return nil
 		},
 	}

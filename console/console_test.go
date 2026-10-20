@@ -144,3 +144,13 @@ func TestDBConfiguration(t *testing.T) {
 		t.Fatal("status without db")
 	}
 }
+
+func TestRollbackWithFakeDB(t *testing.T) {
+	a, out, errOut := testApp("no\n")
+	if code := a.Run(context.Background(), []string{"migrations:rollback"}); code != 0 || !strings.Contains(out.String(), "CANCELLED") {
+		t.Fatalf("cancel: %s%s", out, errOut)
+	}
+	if code := a.Run(context.Background(), []string{"migrations:rollback", "-n"}); code != 1 || !strings.Contains(errOut.String(), "nothing to roll back") {
+		t.Fatalf("empty rollback: %s", errOut)
+	}
+}

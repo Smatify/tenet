@@ -2,6 +2,7 @@ package migrations
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
 	"slices"
@@ -24,6 +25,7 @@ type Migrator struct {
 	table     string
 	lockTable string
 	now       func() time.Time
+	group     int // group of the current run
 }
 
 // Option configures a Migrator.
@@ -66,6 +68,7 @@ func (m *Migrator) metadataSchema() *schema.Schema {
 	v.AddColumn("version", types.String).SetLength(191)
 	v.AddColumn("executed_at", types.DateTime).SetNullable(true)
 	v.AddColumn("execution_time", types.Integer).SetNullable(true)
+	v.AddColumn("group_id", types.Integer).SetNullable(true)
 	v.SetPrimaryKey("version")
 	l := s.CreateTable(m.lockTable)
 	l.AddColumn("id", types.Integer)
@@ -84,6 +87,11 @@ func (m *Migrator) Init(ctx context.Context) error {
 	ddl := schema.NewDDL(m.db.Dialect())
 	for _, t := range m.metadataSchema().Tables {
 		if m.tableExists(ctx, t.Name) {
+			if t.Name == m.table {
+				if err := m.upgradeTable(ctx, ddl, t); err != nil {
+					return err
+				}
+			}
 			continue
 		}
 		stmts, err := ddl.CreateTable(t)
@@ -94,6 +102,28 @@ func (m *Migrator) Init(ctx context.Context) error {
 			if _, err := m.db.ExecContext(ctx, s); err != nil {
 				return fmt.Errorf("migrations: creating %s: %w", t.Name, err)
 			}
+		}
+	}
+	return nil
+}
+
+// upgradeTable adds the group_id column to versions tables created by
+// older versions.
+func (m *Migrator) upgradeTable(ctx context.Context, ddl *schema.DDL, t *schema.Table) error {
+	// Unquoted on purpose: SQLite treats an unknown double-quoted identifier
+	// as a string literal, which would hide the missing column.
+	var n int
+	if m.db.NewSelect().ColumnExpr("COUNT(group_id)").Table(m.table).Scan(ctx, &n) == nil {
+		return nil
+	}
+	diff := &schema.Diff{AlterTables: []*schema.TableDiff{{From: t, To: t, AddColumns: []*schema.Column{t.Column("group_id")}}}}
+	stmts, err := ddl.Migrate(diff)
+	if err != nil {
+		return err
+	}
+	for _, s := range stmts {
+		if _, err := m.db.ExecContext(ctx, s); err != nil {
+			return fmt.Errorf("migrations: upgrading %s: %w", m.table, err)
 		}
 	}
 	return nil
@@ -278,6 +308,9 @@ func (m *Migrator) run(ctx context.Context, target string, dry bool) ([]Step, er
 	if err != nil {
 		return nil, err
 	}
+	if m.group, err = m.nextGroup(ctx); err != nil {
+		return nil, err
+	}
 	for i := range steps {
 		if err := m.execute(ctx, &steps[i], dry); err != nil {
 			return steps[:i], err
@@ -311,6 +344,9 @@ func (m *Migrator) Execute(ctx context.Context, version string, up bool) (Step, 
 		return Step{}, err
 	}
 	defer func() { _ = m.Unlock(context.WithoutCancel(ctx)) }()
+	if m.group, err = m.nextGroup(ctx); err != nil {
+		return Step{}, err
+	}
 	step := Step{Migration: mig, Up: up}
 	return step, m.execute(ctx, &step, false)
 }
@@ -373,7 +409,85 @@ func (m *Migrator) record(ctx context.Context, db dbal.IDB, version string, up b
 	if err != nil {
 		return err
 	}
-	_, err = db.NewInsert().Table(m.table).Columns("version", "executed_at", "execution_time").
-		Values(version, at, int(d.Milliseconds())).Exec(ctx)
+	_, err = db.NewInsert().Table(m.table).Columns("version", "executed_at", "execution_time", "group_id").
+		Values(version, at, int(d.Milliseconds()), m.group).Exec(ctx)
 	return err
+}
+
+func (m *Migrator) maxGroup(ctx context.Context) (*int, error) {
+	var g *int
+	err := m.db.NewSelect().ColumnExpr("MAX(?)", dbal.Ident("group_id")).Table(m.table).Scan(ctx, &g)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, nil
+	}
+	return g, err
+}
+
+// nextGroup returns the group number for a new run.
+func (m *Migrator) nextGroup(ctx context.Context) (int, error) {
+	g, err := m.maxGroup(ctx)
+	if err != nil {
+		return 0, err
+	}
+	if g == nil {
+		return 1, nil
+	}
+	return *g + 1, nil
+}
+
+// LastGroup returns the versions applied by the most recent run, newest first.
+func (m *Migrator) LastGroup(ctx context.Context) ([]string, error) {
+	g, err := m.maxGroup(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if g == nil {
+		return nil, nil
+	}
+	var out []string
+	err = m.db.NewSelect().Column("version").Table(m.table).Where("? = ?", dbal.Ident("group_id"), *g).
+		OrderBy("version", dbal.Desc).ForEach(ctx, func(r *sql.Rows) error {
+		var v string
+		if err := r.Scan(&v); err != nil {
+			return err
+		}
+		out = append(out, v)
+		return nil
+	})
+	return out, err
+}
+
+// Rollback reverts every migration applied by the most recent run (or
+// Execute call), newest first. With dry it only returns the SQL.
+func (m *Migrator) Rollback(ctx context.Context, dry bool) ([]Step, error) {
+	if err := m.Init(ctx); err != nil {
+		return nil, err
+	}
+	if !dry {
+		if err := m.Lock(ctx); err != nil {
+			return nil, err
+		}
+		defer func() { _ = m.Unlock(context.WithoutCancel(ctx)) }()
+	}
+	versions, err := m.LastGroup(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if len(versions) == 0 {
+		return nil, errors.New("migrations: nothing to roll back")
+	}
+	var steps []Step
+	for _, v := range versions {
+		mig, ok := m.reg.Get(v)
+		if !ok {
+			return nil, fmt.Errorf("migrations: cannot revert %s: it is not registered", v)
+		}
+		steps = append(steps, Step{Migration: mig})
+	}
+	for i := range steps {
+		if err := m.execute(ctx, &steps[i], dry); err != nil {
+			return steps[:i], err
+		}
+	}
+	return steps, nil
 }
