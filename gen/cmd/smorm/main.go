@@ -11,6 +11,7 @@ import (
 	"os"
 
 	"github.com/smatify/smorm/gen"
+	"github.com/smatify/smorm/gen/rename"
 	"github.com/smatify/smorm/gen/scaffold"
 	"github.com/smatify/smorm/internal/brand"
 )
@@ -19,7 +20,7 @@ func main() { os.Exit(run(os.Args[1:], os.Stdout, os.Stderr)) }
 
 func run(args []string, out, errOut io.Writer) int {
 	if len(args) == 0 {
-		fmt.Fprintf(errOut, "usage: %s init --dialect <postgres|mysql|mariadb|sqlite|mssql> | generate [dir...]\n", brand.CLIName)
+		fmt.Fprintf(errOut, "usage: %s init --dialect <postgres|mysql|mariadb|sqlite|mssql> | generate [dir...] | rename-tags --to <key> [dir]\n", brand.CLIName)
 		return 2
 	}
 	switch args[0] {
@@ -44,6 +45,28 @@ func run(args []string, out, errOut io.Writer) int {
 			fmt.Fprintln(out, " created:", f)
 		}
 		fmt.Fprintf(out, "\nNext steps:\n  go mod tidy\n  export %s=...\n  go run ./cmd/console make:entity\n", brand.Env("database_url"))
+		return 0
+	case "rename-tags":
+		fs := flag.NewFlagSet("rename-tags", flag.ContinueOnError)
+		fs.SetOutput(errOut)
+		from := fs.String("from", brand.TagKey, "current struct tag key")
+		to := fs.String("to", "", "new struct tag key")
+		if err := fs.Parse(args[1:]); err != nil {
+			return 2
+		}
+		dir := fs.Arg(0)
+		if dir == "" {
+			dir = "."
+		}
+		files, err := rename.Tags(dir, *from, *to)
+		if err != nil {
+			fmt.Fprintln(errOut, err)
+			return 1
+		}
+		for _, f := range files {
+			fmt.Fprintln(out, " updated:", f)
+		}
+		fmt.Fprintf(out, "%d file(s) updated\n", len(files))
 		return 0
 	case "generate":
 		dirs := args[1:]

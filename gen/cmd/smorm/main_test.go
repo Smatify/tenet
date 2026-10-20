@@ -2,6 +2,8 @@ package main
 
 import (
 	"bytes"
+
+	"github.com/smatify/smorm/internal/brand"
 	"os"
 	"path/filepath"
 	"strings"
@@ -27,5 +29,21 @@ func TestRun(t *testing.T) {
 	}
 	if run([]string{"generate", "does-not-exist"}, &out, &errOut) != 1 {
 		t.Fatal("generate error")
+	}
+}
+
+func TestRenameTags(t *testing.T) {
+	var out, errOut bytes.Buffer
+	dir := t.TempDir()
+	_ = os.WriteFile(filepath.Join(dir, "e.go"), []byte("package e\n\ntype E struct {\n\tA string `"+brand.TagKey+":\"length:1\"`\n}\n"), 0o644)
+	if code := run([]string{"rename-tags", "-to", "orm", dir}, &out, &errOut); code != 0 || !strings.Contains(out.String(), "1 file(s) updated") {
+		t.Fatalf("rename: %d %s %s", code, out.String(), errOut.String())
+	}
+	b, _ := os.ReadFile(filepath.Join(dir, "e.go"))
+	if !strings.Contains(string(b), "`orm:\"length:1\"`") {
+		t.Fatalf("file:\n%s", b)
+	}
+	if run([]string{"rename-tags", "-to", ""}, &out, &errOut) != 1 || run([]string{"rename-tags", "-bogus"}, &out, &errOut) != 2 {
+		t.Fatal("errors")
 	}
 }
