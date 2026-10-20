@@ -46,6 +46,18 @@ type Entity struct {
 	DoctrineStyle bool
 	HeaderIndex   []int // reflect index of the embedded header
 
+	// Inheritance is set on every class of a hierarchy; Root is the class
+	// that declares it (Root == e for the root and for classes without
+	// inheritance). Subclasses embed their parent entity.
+	Inheritance         Inheritance
+	Root                *Entity
+	Parent              *Entity
+	ParentIndex         []int // reflect index of the embedded parent
+	Subclasses          []*Entity
+	DiscriminatorColumn string
+	DiscriminatorValue  string
+	Abstract            bool
+
 	// Generated reports whether a generated accessor is used (set by Accessor).
 	Generated bool
 
@@ -54,6 +66,54 @@ type Entity struct {
 	assocBy      map[string]*Association
 	accessorOnce sync.Once
 	accessor     Accessor
+}
+
+// Inheritance is the mapping strategy of a class hierarchy.
+type Inheritance string
+
+// Inheritance strategies.
+const (
+	SingleTable Inheritance = "single" // one table for the whole hierarchy
+	Joined      Inheritance = "joined" // one table per class, joined by the identifier
+)
+
+// IsPolymorphic reports whether loading e may yield subclass instances.
+func (e *Entity) IsPolymorphic() bool { return e.Inheritance != "" && len(e.Subclasses) > 0 }
+
+// Descendants returns e and all its (transitive) subclasses.
+func (e *Entity) Descendants() []*Entity {
+	out := []*Entity{e}
+	for i := 0; i < len(out); i++ {
+		out = append(out, out[i].Subclasses...)
+	}
+	return out
+}
+
+// ClassForDiscriminator returns the class of the hierarchy with value v.
+func (e *Entity) ClassForDiscriminator(v string) *Entity {
+	for _, c := range e.Root.Descendants() {
+		if c.DiscriminatorValue == v {
+			return c
+		}
+	}
+	return nil
+}
+
+// Tables returns the tables of e from the root down (one for single table
+// inheritance and plain entities).
+func (e *Entity) Tables() []string {
+	if e.Inheritance != Joined {
+		return []string{e.Table}
+	}
+	var chain []*Entity
+	for c := e; c != nil; c = c.Parent {
+		chain = append([]*Entity{c}, chain...)
+	}
+	out := make([]string, len(chain))
+	for i, c := range chain {
+		out[i] = c.Table
+	}
+	return out
 }
 
 // Field returns the field with the Go name, or nil.
@@ -102,6 +162,7 @@ func (e *Entity) index() {
 
 // Field is a mapped column.
 type Field struct {
+	Table    string // table holding the column (differs per class with joined inheritance)
 	Pos      int    // position in Entity.Fields (accessor index)
 	Name     string // Go field name; empty for join columns without own field
 	Column   string
@@ -215,6 +276,8 @@ type Association struct {
 	OrphanRemoval bool
 	OrderBy       string
 	Exported      bool
+	// Inherited is true for associations a subclass copied from its parent.
+	Inherited bool
 }
 
 // Inverse returns the association on the other side, or nil when unidirectional.

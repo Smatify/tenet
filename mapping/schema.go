@@ -5,15 +5,21 @@ import (
 	"strings"
 
 	"github.com/smatify/smorm/schema"
+	"github.com/smatify/smorm/types"
 )
 
 // BuildSchema returns the database schema the entities map to, including
 // join tables and identifier sequences.
 func BuildSchema(entities []*Entity) *schema.Schema {
 	s := schema.New()
-	sorted := slices.Clone(entities)
+	sorted := withHierarchies(entities)
 	slices.SortFunc(sorted, func(a, b *Entity) int { return strings.Compare(a.Table, b.Table) })
+	var subclasses []*Entity
 	for _, e := range sorted {
+		if e.Parent != nil {
+			subclasses = append(subclasses, e)
+			continue
+		}
 		if s.HasTable(e.Table) {
 			continue
 		}
@@ -30,6 +36,10 @@ func BuildSchema(entities []*Entity) *schema.Schema {
 				pk = append(pk, f.Column)
 				c.AutoIncrement = e.Generator == GenIdentity && len(e.ID) == 1
 			}
+		}
+		if e.Inheritance != "" {
+			t.AddColumn(e.DiscriminatorColumn, types.String).SetLength(255)
+			t.AddIndex(e.DiscriminatorColumn)
 		}
 		t.SetPrimaryKey(pk...)
 		for _, d := range e.Indexes {
@@ -49,6 +59,10 @@ func BuildSchema(entities []*Entity) *schema.Schema {
 		if e.Generator == GenSequence && s.Sequence(e.Sequence) == nil {
 			s.CreateSequence(e.Sequence, 1, 1)
 		}
+	}
+	slices.SortFunc(subclasses, func(a, b *Entity) int { return depth(a) - depth(b) })
+	for _, e := range subclasses {
+		addSubclass(s, e)
 	}
 	for _, e := range sorted {
 		for _, a := range e.Assocs {
@@ -87,4 +101,89 @@ func coveredByIndex(t *schema.Table, col string) bool {
 		}
 	}
 	return false
+}
+
+func depth(e *Entity) int {
+	n := 0
+	for p := e.Parent; p != nil; p = p.Parent {
+		n++
+	}
+	return n
+}
+
+// withHierarchies adds the parents of subclasses (and roots' known
+// subclasses) so hierarchies are complete.
+func withHierarchies(entities []*Entity) []*Entity {
+	out := slices.Clone(entities)
+	for i := 0; i < len(out); i++ {
+		for _, rel := range append([]*Entity{out[i].Parent}, out[i].Subclasses...) {
+			if rel != nil && !slices.Contains(out, rel) {
+				out = append(out, rel)
+			}
+		}
+	}
+	return out
+}
+
+// ownFields returns the fields a subclass declares itself.
+func ownFields(e *Entity) []*Field {
+	var out []*Field
+	for _, f := range e.Fields {
+		if e.Parent.FieldByColumn(f.Column) == nil {
+			out = append(out, f)
+		}
+	}
+	return out
+}
+
+func addSubclass(s *schema.Schema, e *Entity) {
+	if e.Inheritance == SingleTable {
+		t := s.Table(e.Table)
+		for _, f := range ownFields(e) {
+			if t.Column(f.Column) != nil {
+				continue // the same column declared by a sibling class
+			}
+			c := t.AddColumn(f.Column, f.Type.Name())
+			c.Options, c.Default, c.Comment = f.Options, f.Default, f.Comment
+			c.Nullable = true
+		}
+		addOwnConstraints(t, e)
+		return
+	}
+	t := s.CreateTable(e.Table)
+	var pk []string
+	for _, id := range e.ID {
+		c := t.AddColumn(id.Column, id.Type.Name())
+		c.Options = id.Options
+		pk = append(pk, id.Column)
+	}
+	t.SetPrimaryKey(pk...)
+	t.AddForeignKey(pk, e.Parent.Table, pk).SetOnDelete(schema.Cascade)
+	for _, f := range ownFields(e) {
+		c := t.AddColumn(f.Column, f.Type.Name())
+		c.Options, c.Nullable, c.Default, c.Comment = f.Options, f.Nullable, f.Default, f.Comment
+	}
+	addOwnConstraints(t, e)
+}
+
+func addOwnConstraints(t *schema.Table, e *Entity) {
+	for _, d := range e.Indexes {
+		if t.Index(d.Name) == nil {
+			t.Indexes = append(t.Indexes, &schema.Index{Name: d.Name, Columns: slices.Clone(d.Columns), Unique: d.Unique})
+		}
+	}
+	for _, a := range e.Assocs {
+		if a.Inherited || !a.Owning || !a.Kind.IsToOne() {
+			continue
+		}
+		jc := a.JoinColumns[0]
+		if t.ForeignKey(schema.IdentifierName("fk", t.Name, []string{jc.Name})) != nil {
+			continue
+		}
+		fk := t.AddForeignKey([]string{jc.Name}, a.Target.Table, []string{jc.Referenced})
+		fk.OnDelete = schema.Action(jc.OnDelete)
+		if !coveredByIndex(t, jc.Name) {
+			t.AddIndex(jc.Name)
+		}
+	}
 }

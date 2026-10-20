@@ -94,8 +94,22 @@ func IsEntity(t reflect.Type) bool {
 	if t.Kind() != reflect.Struct {
 		return false
 	}
-	_, ok := findHeader(t)
+	if _, ok := findHeader(t); ok {
+		return true
+	}
+	_, ok := parentField(t)
 	return ok
+}
+
+// parentField returns the anonymous embedded entity of a subclass.
+func parentField(t reflect.Type) (reflect.StructField, bool) {
+	for i := range t.NumField() {
+		f := t.Field(i)
+		if f.Anonymous && f.Type.Kind() == reflect.Struct && f.Type != HeaderType && IsEntity(f.Type) {
+			return f, true
+		}
+	}
+	return reflect.StructField{}, false
 }
 
 func findHeader(t reflect.Type) (reflect.StructField, bool) {
@@ -138,7 +152,8 @@ func (e *MappingError) Error() string {
 	return fmt.Sprintf("%s: %s: %s", brand.Name, e.Entity, e.Msg)
 }
 
-var entityOptions = map[string]bool{"table": true, "repository": true, "comment": true, "sequence": true}
+var entityOptions = map[string]bool{"table": true, "repository": true, "comment": true, "sequence": true,
+	"inheritance": true, "discriminator": true, "discriminatorValue": true, "abstract": true}
 
 var fieldOptions = map[string]bool{
 	"column": true, "type": true, "length": true, "precision": true, "scale": true, "fixed": true,
@@ -160,9 +175,13 @@ func (r *Registry) parse(t reflect.Type) (*Entity, error) {
 	}
 	hdr, ok := findHeader(t)
 	if !ok {
+		if pf, isSub := parentField(t); isSub {
+			return r.parseSubclass(e, pf)
+		}
 		return nil, errf("", "not an entity: embed %s.Entity", brand.Name)
 	}
 	e.HeaderIndex = hdr.Index
+	e.Root = e
 	tag, err := ParseTag(hdr.Tag.Get(brand.TagKey))
 	if err != nil {
 		return nil, errf("", "%v", err)
@@ -179,6 +198,25 @@ func (r *Registry) parse(t reflect.Type) (*Entity, error) {
 	e.Repository = tag.Get("repository")
 	e.Comment = Unquote(tag.Get("comment"))
 	e.Sequence = tag.Get("sequence")
+	switch inh := Inheritance(tag.Get("inheritance")); inh {
+	case "":
+		if tag.Has("discriminator") || tag.Has("discriminatorValue") {
+			return nil, errf("", "discriminator options need inheritance:single or inheritance:joined")
+		}
+	case SingleTable, Joined:
+		e.Inheritance = inh
+		e.DiscriminatorColumn = tag.Get("discriminator")
+		if e.DiscriminatorColumn == "" {
+			e.DiscriminatorColumn = "dtype"
+		}
+		e.DiscriminatorValue = tag.Get("discriminatorValue")
+		if e.DiscriminatorValue == "" {
+			e.DiscriminatorValue = r.naming.TableName(e.Name)
+		}
+		e.Abstract = tag.Has("abstract")
+	default:
+		return nil, errf("", "unknown inheritance %q (single or joined)", inh)
+	}
 
 	if err := r.walk(e, t, nil, embedCtx{}); err != nil {
 		return nil, err
@@ -233,6 +271,12 @@ func (r *Registry) parse(t reflect.Type) (*Entity, error) {
 		if !f.Exported && f.Name != "" {
 			e.DoctrineStyle = true
 		}
+		f.Table = e.Table
+	}
+	if e.Inheritance != "" {
+		if col := e.FieldByColumn(e.DiscriminatorColumn); col != nil || e.byColumnHas(e.DiscriminatorColumn) {
+			return nil, errf("", "discriminator column %q collides with a mapped field", e.DiscriminatorColumn)
+		}
 	}
 	e.index()
 	return e, nil
@@ -277,77 +321,85 @@ type embedCtx struct {
 // walk collects fields of t (and anonymous embedded structs) into e.
 func (r *Registry) walk(e *Entity, t reflect.Type, prefix []int, emb embedCtx) error {
 	for i := range t.NumField() {
-		sf := t.Field(i)
-		index := append(slices.Clone(prefix), i)
-		if sf.Anonymous && sf.Type == HeaderType {
-			continue
-		}
-		raw, hasTag := sf.Tag.Lookup(brand.TagKey)
-		if raw == "-" {
-			continue
-		}
-		tag, err := ParseTag(raw)
-		if err != nil {
-			return &MappingError{Entity: e.Name, Field: sf.Name, Msg: err.Error()}
-		}
-		for _, k := range tag.Keys() {
-			if !fieldOptions[k] {
-				return &MappingError{Entity: e.Name, Field: sf.Name, Msg: fmt.Sprintf("unknown tag option %q", k)}
-			}
-		}
-		ft := sf.Type
-		if sf.Anonymous && ft.Kind() == reflect.Struct && ft != timeType && !types.IsValuerScanner(ft) && !hasTag {
-			if err := r.walk(e, ft, index, emb); err != nil {
-				return err
-			}
-			continue
-		}
-		if tag.Has("embedded") {
-			if ft.Kind() != reflect.Struct || IsEntity(ft) {
-				return &MappingError{Entity: e.Name, Field: emb.name + sf.Name, Msg: "embedded fields must be (non-entity) struct values"}
-			}
-			sub := embedCtx{column: emb.column, name: emb.name + sf.Name + ".", field: emb.name + sf.Name}
-			switch {
-			case tag.Has("noprefix"):
-			case tag.Get("prefix") != "":
-				sub.column += tag.Get("prefix")
-			default:
-				sub.column += r.naming.ColumnName(sf.Name) + "_"
-			}
-			if err := r.walk(e, ft, index, sub); err != nil {
-				return err
-			}
-			continue
-		}
-		if tag.Has("prefix") || tag.Has("noprefix") {
-			return &MappingError{Entity: e.Name, Field: emb.name + sf.Name, Msg: "prefix and noprefix need embedded"}
-		}
-		if _, ok := isAssocTag(tag); ok || isEntityContainer(ft) {
-			if emb.field != "" {
-				return &MappingError{Entity: e.Name, Field: emb.name + sf.Name, Msg: "associations inside embeddables are not supported"}
-			}
-		}
-		if kind, ok := isAssocTag(tag); ok {
-			if err := r.parseAssoc(e, sf, index, tag, kind); err != nil {
-				return err
-			}
-			continue
-		}
-		if isEntityContainer(ft) {
-			if err := r.parseAssoc(e, sf, index, tag, 0); err != nil {
-				return err
-			}
-			continue
-		}
-		if emb.field != "" && (tag.Has("id") || tag.Has("pk")) {
-			return &MappingError{Entity: e.Name, Field: emb.name + sf.Name, Msg: "identifiers inside embeddables are not supported"}
-		}
-		f, err := r.parseField(e, sf, index, tag, emb)
-		if err != nil {
+		if err := r.walkField(e, t, i, prefix, emb); err != nil {
 			return err
 		}
-		e.Fields = append(e.Fields, f)
 	}
+	return nil
+}
+
+// walkField maps field i of t.
+func (r *Registry) walkField(e *Entity, t reflect.Type, i int, prefix []int, emb embedCtx) error {
+	sf := t.Field(i)
+	index := append(slices.Clone(prefix), i)
+	if sf.Anonymous && sf.Type == HeaderType {
+		return nil
+	}
+	raw, hasTag := sf.Tag.Lookup(brand.TagKey)
+	if raw == "-" {
+		return nil
+	}
+	tag, err := ParseTag(raw)
+	if err != nil {
+		return &MappingError{Entity: e.Name, Field: sf.Name, Msg: err.Error()}
+	}
+	for _, k := range tag.Keys() {
+		if !fieldOptions[k] {
+			return &MappingError{Entity: e.Name, Field: sf.Name, Msg: fmt.Sprintf("unknown tag option %q", k)}
+		}
+	}
+	ft := sf.Type
+	if sf.Anonymous && ft.Kind() == reflect.Struct && ft != timeType && !types.IsValuerScanner(ft) && !hasTag {
+		if err := r.walk(e, ft, index, emb); err != nil {
+			return err
+		}
+		return nil
+	}
+	if tag.Has("embedded") {
+		if ft.Kind() != reflect.Struct || IsEntity(ft) {
+			return &MappingError{Entity: e.Name, Field: emb.name + sf.Name, Msg: "embedded fields must be (non-entity) struct values"}
+		}
+		sub := embedCtx{column: emb.column, name: emb.name + sf.Name + ".", field: emb.name + sf.Name}
+		switch {
+		case tag.Has("noprefix"):
+		case tag.Get("prefix") != "":
+			sub.column += tag.Get("prefix")
+		default:
+			sub.column += r.naming.ColumnName(sf.Name) + "_"
+		}
+		if err := r.walk(e, ft, index, sub); err != nil {
+			return err
+		}
+		return nil
+	}
+	if tag.Has("prefix") || tag.Has("noprefix") {
+		return &MappingError{Entity: e.Name, Field: emb.name + sf.Name, Msg: "prefix and noprefix need embedded"}
+	}
+	if _, ok := isAssocTag(tag); ok || isEntityContainer(ft) {
+		if emb.field != "" {
+			return &MappingError{Entity: e.Name, Field: emb.name + sf.Name, Msg: "associations inside embeddables are not supported"}
+		}
+	}
+	if kind, ok := isAssocTag(tag); ok {
+		if err := r.parseAssoc(e, sf, index, tag, kind); err != nil {
+			return err
+		}
+		return nil
+	}
+	if isEntityContainer(ft) {
+		if err := r.parseAssoc(e, sf, index, tag, 0); err != nil {
+			return err
+		}
+		return nil
+	}
+	if emb.field != "" && (tag.Has("id") || tag.Has("pk")) {
+		return &MappingError{Entity: e.Name, Field: emb.name + sf.Name, Msg: "identifiers inside embeddables are not supported"}
+	}
+	f, err := r.parseField(e, sf, index, tag, emb)
+	if err != nil {
+		return err
+	}
+	e.Fields = append(e.Fields, f)
 	return nil
 }
 
@@ -595,6 +647,9 @@ func (r *Registry) parseAssoc(e *Entity, sf reflect.StructField, index []int, ta
 // columns once target identifiers are known.
 func (r *Registry) resolve(e *Entity) error {
 	for _, a := range e.Assocs {
+		if a.Inherited {
+			continue // resolved on the parent
+		}
 		errf := func(format string, args ...any) error {
 			return &MappingError{Entity: e.Name, Field: a.Name, Msg: fmt.Sprintf(format, args...)}
 		}
@@ -619,7 +674,7 @@ func (r *Registry) resolve(e *Entity) error {
 			if jc.Name == "" {
 				jc.Name = r.naming.JoinColumnName(a.Name, jc.Referenced)
 			}
-			fk := &Field{Column: jc.Name, Type: ref.Type, Options: ref.Options, Nullable: jc.Nullable, Assoc: a, GoType: ref.GoType}
+			fk := &Field{Table: e.Table, Column: jc.Name, Type: ref.Type, Options: ref.Options, Nullable: jc.Nullable || (e.Parent != nil && e.Inheritance == SingleTable), Assoc: a, GoType: ref.GoType}
 			if existing := e.FieldByColumn(jc.Name); existing != nil {
 				return errf("join column %q collides with field %s", jc.Name, existing.Name)
 			}
@@ -648,6 +703,9 @@ func (r *Registry) resolve(e *Entity) error {
 	e.index()
 	// Validate bidirectional pairs once both sides are known.
 	for _, a := range e.Assocs {
+		if a.Inherited {
+			continue
+		}
 		other := ""
 		if a.MappedBy != "" {
 			other = a.MappedBy
