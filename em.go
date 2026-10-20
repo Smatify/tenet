@@ -91,3 +91,7 @@ const SoftDeleteFilterName = orm.SoftDeleteFilterName
 // Concrete returns the full instance behind an entity pointer, e.g. the
 // *Car behind a *Vehicle from a polymorphic query (use a type switch).
 func Concrete(ptr any) any { return orm.Concrete(ptr) }
+
+// WithSecondLevelCache shares data of entities tagged cache between entity
+// managers (see package cache for the in-memory implementation).
+var WithSecondLevelCache = orm.WithSecondLevelCache

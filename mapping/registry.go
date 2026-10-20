@@ -153,7 +153,8 @@ func (e *MappingError) Error() string {
 }
 
 var entityOptions = map[string]bool{"table": true, "repository": true, "comment": true, "sequence": true,
-	"inheritance": true, "discriminator": true, "discriminatorValue": true, "abstract": true}
+	"inheritance": true, "discriminator": true, "discriminatorValue": true, "abstract": true,
+	"cache": true, "cacheTTL": true}
 
 var fieldOptions = map[string]bool{
 	"column": true, "type": true, "length": true, "precision": true, "scale": true, "fixed": true,
@@ -198,6 +199,16 @@ func (r *Registry) parse(t reflect.Type) (*Entity, error) {
 	e.Repository = tag.Get("repository")
 	e.Comment = Unquote(tag.Get("comment"))
 	e.Sequence = tag.Get("sequence")
+	if tag.Has("cache") || tag.Has("cacheTTL") {
+		e.Cacheable = true
+		if v := tag.Get("cacheTTL"); v != "" {
+			d, err := time.ParseDuration(v)
+			if err != nil || d < 0 {
+				return nil, errf("", "invalid cacheTTL %q", v)
+			}
+			e.CacheTTL = d
+		}
+	}
 	switch inh := Inheritance(tag.Get("inheritance")); inh {
 	case "":
 		if tag.Has("discriminator") || tag.Has("discriminatorValue") {

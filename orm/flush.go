@@ -335,18 +335,22 @@ func (em *EntityManager) Flush(ctx context.Context) error {
 		if err := em.takeSnapshot(e); err != nil {
 			return err
 		}
+		em.cachePut(e)
 	}
 	em.syncCollectionSnapshots()
 	for _, u := range updates {
 		if u.soft {
+			em.cacheEvict(u.e)
 			em.forget(u.e)
 			continue
 		}
 		if err := em.takeSnapshot(u.e); err != nil {
 			return err
 		}
+		em.cachePut(u.e)
 	}
 	for _, e := range deleteOrder {
+		em.cacheEvict(e)
 		em.forget(e)
 	}
 	em.compact()

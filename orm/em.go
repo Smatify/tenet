@@ -7,6 +7,7 @@ import (
 	"time"
 	"weak"
 
+	"github.com/smatify/smorm/cache"
 	"github.com/smatify/smorm/dbal"
 	"github.com/smatify/smorm/internal/entity"
 	"github.com/smatify/smorm/mapping"
@@ -26,6 +27,7 @@ type EntityManager struct {
 	ctx       context.Context
 	batchSize int
 	filters   *Filters
+	cache     cache.Cache
 }
 
 // Option configures an EntityManager.
@@ -180,6 +182,13 @@ func (em *EntityManager) Find(ctx context.Context, t reflect.Type, id ...any) (a
 		if e.initialized {
 			return view(e, meta), nil
 		}
+	}
+	var force *entry
+	if e := em.lookup(meta, idKey(id)); e != nil && !e.initialized && e.meta == meta {
+		force = e
+	}
+	if ptr, ok, err := em.cacheGet(ctx, meta, idKey(id), force); err != nil || ok {
+		return ptr, err
 	}
 	res, err := em.loadWhere(ctx, meta, func(q *dbal.SelectQuery) { whereID(q, meta, "", id) }, 1)
 	if err != nil {

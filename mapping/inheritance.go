@@ -52,6 +52,7 @@ func (r *Registry) parseSubclass(e *Entity, pf reflect.StructField) (*Entity, er
 		e.DiscriminatorValue = r.naming.TableName(e.Name)
 	}
 	e.Abstract = tag.Has("abstract")
+	e.Cacheable, e.CacheTTL = e.Root.Cacheable, e.Root.CacheTTL
 	if other := e.Root.ClassForDiscriminator(e.DiscriminatorValue); other != nil {
 		return nil, errf("discriminator value %q is already used by %s", e.DiscriminatorValue, other.Name)
 	}

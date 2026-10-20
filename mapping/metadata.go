@@ -58,6 +58,11 @@ type Entity struct {
 	DiscriminatorValue  string
 	Abstract            bool
 
+	// Cacheable entities are stored in the second-level cache (tag option
+	// cache, optional cacheTTL:5m); subclasses inherit it from the root.
+	Cacheable bool
+	CacheTTL  time.Duration
+
 	// Generated reports whether a generated accessor is used (set by Accessor).
 	Generated bool
 

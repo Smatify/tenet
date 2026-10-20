@@ -111,3 +111,5 @@ func (em *EntityManager) filterConds(meta *mapping.Entity, alias string) []dbal.
 	}
 	return out
 }
+
+func colIdent(name string) dbal.Ident { return dbal.Ident(name) }

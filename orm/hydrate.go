@@ -3,6 +3,7 @@ package orm
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"reflect"
 
 	"github.com/smatify/smorm/dbal"
@@ -162,6 +163,22 @@ func (h *hydrator) row(ctx context.Context, rows *sql.Rows, force *entry) (any, 
 	if err := rows.Scan(h.dests...); err != nil {
 		return nil, err
 	}
+	return h.process(ctx, force, true)
+}
+
+// values hydrates from cached database values (in Fields order).
+func (h *hydrator) values(ctx context.Context, vals []any, force *entry) (any, error) {
+	h.prepare()
+	for i, v := range vals {
+		if err := assign(h.dests[i], v); err != nil {
+			return nil, fmt.Errorf("%s.%s: cached value: %w", h.meta.Name, h.meta.Fields[i].Column, err)
+		}
+	}
+	return h.process(ctx, force, false)
+}
+
+// process fills the entity from the scanned slots.
+func (h *hydrator) process(ctx context.Context, force *entry, cacheIt bool) (any, error) {
 	id := make([]any, len(h.meta.ID))
 	for i, f := range h.meta.ID {
 		id[i] = h.slots[f.Pos].holder.Elem().Interface()
@@ -204,6 +221,9 @@ func (h *hydrator) row(ctx context.Context, rows *sql.Rows, force *entry) (any, 
 	em.wireCollections(e)
 	if err := em.takeSnapshot(e); err != nil {
 		return nil, err
+	}
+	if cacheIt {
+		em.cachePut(e)
 	}
 	if err := em.lifecycle(ctx, EventPostLoad, e, nil); err != nil {
 		return nil, err

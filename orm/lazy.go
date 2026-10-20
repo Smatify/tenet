@@ -67,6 +67,9 @@ func (e *entry) EnsureLoaded() {
 // initialize loads e and, for single column identifiers, up to batchSize-1
 // other uninitialized references of the same type in one query.
 func (em *EntityManager) initialize(ctx context.Context, e *entry) error {
+	if _, ok, err := em.cacheGet(ctx, e.meta, e.key, e); err != nil || ok {
+		return err
+	}
 	idf := e.meta.SingleID()
 	if idf == nil || em.batchSize <= 1 {
 		return em.refresh(ctx, e)

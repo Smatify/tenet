@@ -173,3 +173,22 @@ func TestInheritanceErrors(t *testing.T) {
 		t.Fatalf("duplicate discriminator: %v", err)
 	}
 }
+
+type cachedEntity struct {
+	entity.Header `smorm:"cache,cacheTTL:90s"`
+	ID            int64
+}
+type badTTL struct {
+	entity.Header `smorm:"cacheTTL:soon"`
+	ID            int64
+}
+
+func TestCacheOptions(t *testing.T) {
+	e, err := For[cachedEntity](NewRegistry())
+	if err != nil || !e.Cacheable || e.CacheTTL.Seconds() != 90 {
+		t.Fatalf("cache options = %+v %v", e, err)
+	}
+	if err := NewRegistry().Register(badTTL{}); err == nil {
+		t.Fatal("invalid ttl")
+	}
+}
