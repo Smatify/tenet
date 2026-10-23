@@ -210,3 +210,32 @@ func TestApplyRejectsKeywords(t *testing.T) {
 		t.Fatalf("want a keyword error for the inverse side, got %v", err)
 	}
 }
+
+func TestFilesNamedAfterTables(t *testing.T) {
+	dir := filepath.Join(tempModule(t), "entity")
+	mk := &Maker{Dir: dir}
+	if _, err := mk.Apply(EntitySpec{Name: "Demo", Table: "media_demo", Fields: []FieldSpec{{Name: "title", Type: "string"}}}); err != nil {
+		t.Fatal(err)
+	}
+	for _, f := range []string{"media_demo.go", "media_demo_repository.go"} {
+		if _, err := os.Stat(filepath.Join(dir, f)); err != nil {
+			t.Fatalf("%s: %v", f, err)
+		}
+	}
+	// A renamed file is found by its struct and extended in place.
+	if err := os.Rename(filepath.Join(dir, "media_demo.go"), filepath.Join(dir, "media_replay.go")); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := mk.Apply(EntitySpec{Name: "Demo", Fields: []FieldSpec{{Name: "size", Type: "integer"}}}); err != nil {
+		t.Fatal(err)
+	}
+	src, _ := os.ReadFile(filepath.Join(dir, "media_replay.go"))
+	if !strings.Contains(string(src), "func (d *Demo) Size()") {
+		t.Fatalf("field not added to the renamed file:\n%s", src)
+	}
+	for _, f := range []string{"demo.go", "media_demo.go"} {
+		if _, err := os.Stat(filepath.Join(dir, f)); err == nil {
+			t.Fatalf("%s was created again", f)
+		}
+	}
+}

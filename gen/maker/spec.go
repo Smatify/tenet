@@ -132,10 +132,33 @@ type writer struct {
 	style   Style
 	files   map[string]*astedit.File
 	created []string
+	paths   map[string]string // entity → file declaring it
 }
 
+// path returns the file declaring entity: the file in Dir that declares it
+// (files may be renamed, e.g. after their table), else <snake name>.go.
 func (w *writer) path(entity string) string {
+	if p, ok := w.paths[entity]; ok {
+		return p
+	}
+	matches, _ := filepath.Glob(filepath.Join(w.mk.Dir, "*.go"))
+	for _, m := range matches {
+		if strings.HasSuffix(m, "_test.go") {
+			continue
+		}
+		if f, err := astedit.Open(m); err == nil && f.Struct(entity) != nil {
+			w.remember(entity, m)
+			return m
+		}
+	}
 	return filepath.Join(w.mk.Dir, mapping.ToSnake(entity)+".go")
+}
+
+func (w *writer) remember(entity, path string) {
+	if w.paths == nil {
+		w.paths = map[string]string{}
+	}
+	w.paths[entity] = path
 }
 
 func (w *writer) packageName() string {
@@ -174,6 +197,10 @@ func (w *writer) ensureEntity(name string, spec EntitySpec) (bool, error) {
 	if table == "" {
 		table = mapping.ToSnake(name)
 	}
+	// New files are named after their table (media_demo.go), which keeps
+	// entities of one module together.
+	path = filepath.Join(w.mk.Dir, table+".go")
+	w.remember(name, path)
 	var b strings.Builder
 	fmt.Fprintf(&b, "package %s\n\nimport %q\n\n// %s is an entity.\ntype %s struct {\n", pkg, importPath(), name, name)
 	fmt.Fprintf(&b, "\t%s.Entity `%s:\"table:%s\"`\n", root, brand.TagKey, table)
@@ -200,14 +227,13 @@ func (w *writer) ensureEntity(name string, spec EntitySpec) (bool, error) {
 	}
 	w.files[path] = f
 	w.created = append(w.created, path)
-	if err := w.repository(name, pkg); err != nil {
+	if err := w.repository(name, pkg, strings.TrimSuffix(path, ".go")+"_repository.go"); err != nil {
 		return false, err
 	}
 	return true, nil
 }
 
-func (w *writer) repository(name, pkg string) error {
-	path := filepath.Join(w.mk.Dir, mapping.ToSnake(name)+"_repository.go")
+func (w *writer) repository(name, pkg, path string) error {
 	if _, err := os.Stat(path); err == nil {
 		return nil
 	}
