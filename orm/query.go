@@ -28,6 +28,7 @@ type Query struct {
 	lock    dbal.LockMode
 	err     error
 	aliases map[string]*mapping.Entity
+	without map[string]bool // filters disabled for this query
 }
 
 type queryJoin struct {
@@ -98,7 +99,8 @@ func (q *Query) join(path, alias string, left bool) *Query {
 // Where adds conditions joined with AND.
 func (q *Query) Where(conds ...Cond) *Query { q.where = append(q.where, conds...); return q }
 
-// OrderBy sorts by a field ("Name", "a.Name" or a mapping.FieldRef).
+// OrderBy sorts by a field ("Name", "a.Name" or a mapping.FieldRef) or by an
+// expression given as Raw (e.g. Raw("COALESCE({a.Position}, {Position})")).
 func (q *Query) OrderBy(field any, dir dbal.Order) *Query {
 	q.order = append(q.order, queryOrder{field: field, dir: dir})
 	return q
@@ -113,6 +115,21 @@ func (q *Query) Offset(n int) *Query { q.offset = n; return q }
 // With preloads association paths of the results (see EntityManager.Preload).
 func (q *Query) With(paths ...string) *Query { q.with = append(q.with, paths...); return q }
 
+// WithoutFilter disables the named filters for this query only (its root
+// and joined entities; preloads keep the filters of the entity manager).
+func (q *Query) WithoutFilter(names ...string) *Query {
+	if q.without == nil {
+		q.without = map[string]bool{}
+	}
+	for _, n := range names {
+		q.without[n] = true
+	}
+	return q
+}
+
+// WithDeleted includes soft-deleted rows in this query.
+func (q *Query) WithDeleted() *Query { return q.WithoutFilter(SoftDeleteFilterName) }
+
 // ForUpdate locks the selected rows.
 func (q *Query) ForUpdate() *Query { q.lock = dbal.LockForUpdate; return q }
 
@@ -123,6 +140,10 @@ func (q *Query) Clone() *Query {
 	c.where = append([]Cond(nil), q.where...)
 	c.order = append([]queryOrder(nil), q.order...)
 	c.with = append([]string(nil), q.with...)
+	c.without = make(map[string]bool, len(q.without))
+	for k, v := range q.without {
+		c.without[k] = v
+	}
 	c.aliases = make(map[string]*mapping.Entity, len(q.aliases))
 	for k, v := range q.aliases {
 		c.aliases[k] = v
@@ -218,7 +239,7 @@ func (q *Query) buildMode(count, refs bool) (*dbal.SelectQuery, error) {
 		}
 		inner.WhereExpr(e)
 	}
-	for _, c := range append(em.filterConds(meta, RootAlias), classConds(meta, RootAlias, !meta.IsPolymorphic())...) {
+	for _, c := range append(em.filterCondsExcept(meta, RootAlias, q.without), classConds(meta, RootAlias, !meta.IsPolymorphic())...) {
 		inner.WhereExpr(c)
 	}
 	idCol := ""
@@ -258,6 +279,18 @@ func (q *Query) buildMode(count, refs bool) (*dbal.SelectQuery, error) {
 		}
 	}
 	for _, o := range q.order {
+		if r, ok := o.field.(rawCond); ok {
+			expr, err := r.build(q)
+			if err != nil {
+				return nil, err
+			}
+			dir := o.dir
+			if dir != dbal.Desc {
+				dir = dbal.Asc
+			}
+			out.OrderExpr("? "+string(dir), expr)
+			continue
+		}
 		col, _, err := q.resolve(o.field)
 		if err != nil {
 			return nil, err
@@ -285,7 +318,7 @@ func (q *Query) appendJoin(s *dbal.SelectQuery, j queryJoin) error {
 	// JOINs keep their semantics.
 	on := "? = ?"
 	var extra []any
-	for _, c := range append(q.em.filterConds(a.Target, j.alias), classConds(a.Target, j.alias, false)...) {
+	for _, c := range append(q.em.filterCondsExcept(a.Target, j.alias, q.without), classConds(a.Target, j.alias, false)...) {
 		on += " AND ?"
 		extra = append(extra, c)
 	}

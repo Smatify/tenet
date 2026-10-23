@@ -53,7 +53,9 @@ type Config struct {
 
 	MigrationsDir    string            // default "migrations"
 	MigrationsFormat migrations.Format // default go
-	Migrations       *migrations.Registry
+	// MigrationsForwardOnly generates migrations without a Down part.
+	MigrationsForwardOnly bool
+	Migrations            *migrations.Registry
 
 	// IgnoreTables excludes tables from diffs and validation.
 	IgnoreTables func(table string) bool

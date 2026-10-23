@@ -38,6 +38,9 @@ type GenerateOptions struct {
 	Version     string // default NewVersion(time.Now())
 	Description string
 	Up, Down    []string
+	// ForwardOnly writes no Down part (projects that undo changes with a
+	// new migration).
+	ForwardOnly bool
 }
 
 var slugRe = regexp.MustCompile(`[^a-z0-9]+`)
@@ -90,6 +93,9 @@ func Generate(o GenerateOptions) ([]string, error) {
 		if err := os.WriteFile(up, []byte(header+joinSQL(o.Up)), 0o644); err != nil {
 			return nil, err
 		}
+		if o.ForwardOnly {
+			return []string{up}, nil
+		}
 		if err := os.WriteFile(down, []byte(joinSQL(o.Down)), 0o644); err != nil {
 			return nil, err
 		}
@@ -98,7 +104,7 @@ func Generate(o GenerateOptions) ([]string, error) {
 		var buf bytes.Buffer
 		err := goTmpl.Execute(&buf, map[string]any{
 			"Package": o.Package, "Version": o.Version, "Description": strconv.Quote(o.Description),
-			"Up": quoteAll(o.Up), "Down": quoteAll(o.Down), "NoTx": noTx, "Header": brand.GeneratedHeader,
+			"Up": quoteAll(o.Up), "Down": quoteAll(o.Down), "NoTx": noTx, "Header": brand.GeneratedHeader, "ForwardOnly": o.ForwardOnly,
 		})
 		if err != nil {
 			return nil, err
@@ -149,12 +155,14 @@ func init() {
 {{- end}}
 			return nil
 		},
+{{- if not .ForwardOnly}}
 		Down: func(ctx context.Context, m *migrations.M) error {
 {{- range .Down}}
 			m.AddSQL({{.}})
 {{- end}}
 			return nil
 		},
+{{- end}}
 	})
 }
 `))
@@ -178,4 +186,19 @@ func (m *Migrator) Diff(ctx context.Context, entities []*mapping.Entity, ignore 
 		return nil, nil, err
 	}
 	return up, down, nil
+}
+
+var addNotNull = regexp.MustCompile(`(?i)^ALTER TABLE\s+(\S+)\s+ADD\s+(?:COLUMN\s+)?(\S+)\s.*\bNOT NULL\b`)
+
+// NotNullWithoutDefault lists the columns that up adds as NOT NULL without
+// a default: on tables with rows the migration fails unless it fills them
+// (add a default, update the rows, drop the default).
+func NotNullWithoutDefault(up []string) []string {
+	var out []string
+	for _, s := range up {
+		if m := addNotNull.FindStringSubmatch(s); m != nil && !strings.Contains(strings.ToUpper(s), " DEFAULT ") {
+			out = append(out, m[1]+"."+m[2])
+		}
+	}
+	return out
 }

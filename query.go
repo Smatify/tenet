@@ -56,7 +56,7 @@ func (q *Query[T]) LeftJoin(path, alias string) *Query[T] { q.q.LeftJoin(path, a
 // Where adds conditions joined with AND.
 func (q *Query[T]) Where(conds ...Cond) *Query[T] { q.q.Where(conds...); return q }
 
-// OrderBy sorts by a field.
+// OrderBy sorts by a field or by an expression given as Raw.
 func (q *Query[T]) OrderBy(field any, dir dbal.Order) *Query[T] { q.q.OrderBy(field, dir); return q }
 
 // Limit sets the maximum number of results.
@@ -64,6 +64,12 @@ func (q *Query[T]) Limit(n int) *Query[T] { q.q.Limit(n); return q }
 
 // Offset skips results.
 func (q *Query[T]) Offset(n int) *Query[T] { q.q.Offset(n); return q }
+
+// WithoutFilter disables the named filters for this query only.
+func (q *Query[T]) WithoutFilter(names ...string) *Query[T] { q.q.WithoutFilter(names...); return q }
+
+// WithDeleted includes soft-deleted rows in this query.
+func (q *Query[T]) WithDeleted() *Query[T] { q.q.WithDeleted(); return q }
 
 // With preloads association paths of the results.
 func (q *Query[T]) With(paths ...string) *Query[T] { q.q.With(paths...); return q }

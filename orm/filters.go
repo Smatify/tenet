@@ -97,6 +97,11 @@ func (em *EntityManager) Filters() *Filters { return em.filters }
 // filterConds returns the conditions of all enabled filters for meta, with
 // columns qualified by alias ("" for none).
 func (em *EntityManager) filterConds(meta *mapping.Entity, alias string) []dbal.Expr {
+	return em.filterCondsExcept(meta, alias, nil)
+}
+
+// filterCondsExcept is filterConds without the filters named in skip.
+func (em *EntityManager) filterCondsExcept(meta *mapping.Entity, alias string, skip map[string]bool) []dbal.Expr {
 	var out []dbal.Expr
 	col := func(name string) dbal.Ident {
 		if alias == "" {
@@ -105,6 +110,9 @@ func (em *EntityManager) filterConds(meta *mapping.Entity, alias string) []dbal.
 		return dbal.Ident(alias + "." + name)
 	}
 	for _, n := range em.filters.names {
+		if skip[n] {
+			continue
+		}
 		if e, ok := em.filters.filters[n].Condition(meta, col); ok {
 			out = append(out, e)
 		}

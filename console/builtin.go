@@ -205,7 +205,8 @@ func generateCmd() Command {
 			desc = fs.String("description", "", "migration description")
 		},
 		Run: func(_ context.Context, c *Ctx) error {
-			files, err := migrations.Generate(migrations.GenerateOptions{Dir: c.App.Config.MigrationsDir, Format: c.App.format(*format), Description: *desc})
+			files, err := migrations.Generate(migrations.GenerateOptions{Dir: c.App.Config.MigrationsDir, Format: c.App.format(*format), Description: *desc,
+				ForwardOnly: c.App.Config.MigrationsForwardOnly})
 			if err != nil {
 				return err
 			}
@@ -238,11 +239,15 @@ func DiffMigration(ctx context.Context, c *Ctx, format, desc string) error {
 		c.Printf("\n [OK] No changes detected in your mapping information.\n\n")
 		return nil
 	}
-	files, err := migrations.Generate(migrations.GenerateOptions{Dir: a.Config.MigrationsDir, Format: a.format(format), Description: desc, Up: up, Down: down})
+	files, err := migrations.Generate(migrations.GenerateOptions{Dir: a.Config.MigrationsDir, Format: a.format(format), Description: desc, Up: up, Down: down,
+		ForwardOnly: a.Config.MigrationsForwardOnly})
 	if err != nil {
 		return err
 	}
 	c.Success("Generated new migration: " + strings.Join(files, ", "))
+	for _, col := range migrations.NotNullWithoutDefault(up) {
+		c.Printf(" [WARNING] %s is added as NOT NULL without a default: fill existing rows (default, update, drop default)\n", col)
+	}
 	c.Printf(" Review it, then run migrations:migrate\n\n")
 	return nil
 }
