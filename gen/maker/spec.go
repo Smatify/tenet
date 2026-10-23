@@ -3,6 +3,7 @@ package maker
 import (
 	"errors"
 	"fmt"
+	"go/token"
 	"os"
 	"path/filepath"
 	"strings"
@@ -85,6 +86,13 @@ func (mk *Maker) Apply(spec EntitySpec) ([]string, error) {
 	}
 	if spec.Style == "" {
 		spec.Style = StyleDoctrine
+	}
+	for _, f := range spec.Fields {
+		for _, name := range []string{f.Name, f.Inverse} {
+			if token.IsKeyword(name) {
+				return nil, fmt.Errorf("maker: %q is a Go keyword and cannot be a property name; choose another one (e.g. %q)", name, lower(spec.Name)+upper(name))
+			}
+		}
 	}
 	w := &writer{mk: mk, style: spec.Style, files: map[string]*astedit.File{}}
 	if _, err := w.ensureEntity(spec.Name, spec); err != nil {

@@ -197,3 +197,15 @@ func TestNames(t *testing.T) {
 }
 
 func norm(s string) string { return strings.Join(strings.Fields(s), " ") }
+
+func TestApplyRejectsKeywords(t *testing.T) {
+	mk := &Maker{Dir: t.TempDir()}
+	_, err := mk.Apply(EntitySpec{Name: "Ticket", Fields: []FieldSpec{{Name: "type", Type: "string"}}})
+	if err == nil || !strings.Contains(err.Error(), "Go keyword") {
+		t.Fatalf("want a keyword error, got %v", err)
+	}
+	_, err = mk.Apply(EntitySpec{Name: "Ticket", Fields: []FieldSpec{{Name: "owner", Type: "relation", Relation: ManyToOne, Target: "User", Inverse: "func"}}})
+	if err == nil || !strings.Contains(err.Error(), "Go keyword") {
+		t.Fatalf("want a keyword error for the inverse side, got %v", err)
+	}
+}
