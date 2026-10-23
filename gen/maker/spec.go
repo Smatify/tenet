@@ -267,7 +267,8 @@ func singular(s string) string {
 	switch {
 	case strings.HasSuffix(s, "ies") && len(s) > 3:
 		return s[:len(s)-3] + "y"
-	case strings.HasSuffix(s, "sses"), strings.HasSuffix(s, "xes"), strings.HasSuffix(s, "ches"), strings.HasSuffix(s, "shes"):
+	case strings.HasSuffix(s, "sses"), strings.HasSuffix(s, "xes"), strings.HasSuffix(s, "ches"), strings.HasSuffix(s, "shes"),
+		strings.HasSuffix(s, "iases"), strings.HasSuffix(s, "tuses"), strings.HasSuffix(s, "nuses"), strings.HasSuffix(s, "puses"), strings.HasSuffix(s, "ruses"):
 		return s[:len(s)-2]
 	case strings.HasSuffix(s, "s") && !strings.HasSuffix(s, "ss") && len(s) > 1:
 		return s[:len(s)-1]
