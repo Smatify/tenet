@@ -82,3 +82,22 @@ func TestExportName(t *testing.T) {
 		t.Fatal("exportName")
 	}
 }
+
+func TestGenerateIgnoresStaleGeneratedCode(t *testing.T) {
+	dir := t.TempDir()
+	write := func(name, s string) {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(s), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write("go.mod", "module example.com/x\n\ngo 1.27\n")
+	write("x.go", "package x\n\ntype A struct{ B int }\n")
+	// The generated file still refers to a field that was removed.
+	write(FileName, "package x\n\nvar _ = A{}.Removed\n")
+	if _, err := Generate(dir); err != nil {
+		t.Fatalf("a stale generated file must not block regeneration: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, FileName)); !os.IsNotExist(err) {
+		t.Fatal("stale generated file of a package without entities must be removed")
+	}
+}

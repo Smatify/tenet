@@ -57,6 +57,32 @@ func Render(dir string) ([]byte, error) {
 		Dir:        dir,
 		BuildFlags: []string{"-tags=" + brand.Name + "gen"},
 	}
+	pkg, err := loadPackage(cfg, dir)
+	if err != nil {
+		return nil, err
+	}
+	if len(pkg.Errors) > 0 {
+		// The previous generated file may be stale (e.g. it refers to a
+		// removed field); retry with an empty one.
+		abs, err := filepath.Abs(filepath.Join(dir, FileName))
+		if err != nil {
+			return nil, err
+		}
+		if _, err := os.Stat(abs); err == nil && pkg.Name != "" {
+			cfg.Overlay = map[string][]byte{abs: []byte("package " + pkg.Name + "\n")}
+			if pkg, err = loadPackage(cfg, dir); err != nil {
+				return nil, err
+			}
+		}
+	}
+	if len(pkg.Errors) > 0 {
+		return nil, fmt.Errorf("gen: %s: %v", pkg.PkgPath, pkg.Errors[0])
+	}
+	g := &generator{pkg: pkg.Types, imports: map[string]string{}}
+	return g.render()
+}
+
+func loadPackage(cfg *packages.Config, dir string) (*packages.Package, error) {
 	pkgs, err := packages.Load(cfg, ".")
 	if err != nil {
 		return nil, err
@@ -64,13 +90,7 @@ func Render(dir string) ([]byte, error) {
 	if len(pkgs) != 1 {
 		return nil, fmt.Errorf("gen: expected one package in %s, got %d", dir, len(pkgs))
 	}
-	pkg := pkgs[0]
-	if len(pkg.Errors) > 0 {
-		// The previous generated file may be stale; retry without it.
-		return nil, fmt.Errorf("gen: %s: %v", pkg.PkgPath, pkg.Errors[0])
-	}
-	g := &generator{pkg: pkg.Types, imports: map[string]string{}}
-	return g.render()
+	return pkgs[0], nil
 }
 
 type generator struct {
