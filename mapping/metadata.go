@@ -66,6 +66,7 @@ type Entity struct {
 	// Generated reports whether a generated accessor is used (set by Accessor).
 	Generated bool
 
+	indexSpec    string // entity level index option, applied in resolve
 	byName       map[string]*Field
 	byColumn     map[string]*Field
 	assocBy      map[string]*Association

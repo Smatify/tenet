@@ -531,3 +531,33 @@ func TestSelfReferenceValid(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+type IndexedPost struct {
+	entity.Header `smorm:"index:author|CreatedAt;editor"`
+	ID            int64
+	Timestamps
+	author *User     `smorm:"manyToOne"`
+	editor ref[User] `smorm:"joinColumn:editor_user_id"`
+}
+
+func TestEntityIndexes(t *testing.T) {
+	e, err := For[IndexedPost](NewRegistry())
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got []string
+	for _, d := range e.Indexes {
+		got = append(got, d.Name+"="+strings.Join(d.Columns, ","))
+	}
+	want := []string{"idx_indexed_post_author_id_created_at=author_id,created_at", "idx_indexed_post_editor_user_id=editor_user_id"}
+	if !slices.Equal(got, want) {
+		t.Fatalf("indexes = %v", got)
+	}
+	type bad struct {
+		entity.Header `smorm:"index:missing"`
+		ID            int64
+	}
+	if _, err := For[bad](NewRegistry()); err == nil || !strings.Contains(err.Error(), `unknown field "missing"`) {
+		t.Fatalf("err = %v", err)
+	}
+}

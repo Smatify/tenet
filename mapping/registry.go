@@ -152,7 +152,7 @@ func (e *MappingError) Error() string {
 	return fmt.Sprintf("%s: %s: %s", brand.Name, e.Entity, e.Msg)
 }
 
-var entityOptions = map[string]bool{"table": true, "repository": true, "comment": true, "sequence": true,
+var entityOptions = map[string]bool{"table": true, "repository": true, "comment": true, "sequence": true, "index": true,
 	"inheritance": true, "discriminator": true, "discriminatorValue": true, "abstract": true,
 	"cache": true, "cacheTTL": true}
 
@@ -289,8 +289,39 @@ func (r *Registry) parse(t reflect.Type) (*Entity, error) {
 			return nil, errf("", "discriminator column %q collides with a mapped field", e.DiscriminatorColumn)
 		}
 	}
+	e.indexSpec = tag.Get("index")
 	e.index()
 	return e, nil
+}
+
+// entityIndexes adds the indexes declared on the entity header, e.g.
+// index:subsite|createdAt;stream: groups of fields or to-one associations
+// separated by semicolons. They cover columns a field tag cannot reach
+// (join columns, embedded timestamps).
+func (e *Entity) entityIndexes(v string) error {
+	if v == "" {
+		return nil
+	}
+	for _, group := range strings.Split(v, ";") {
+		var cols []string
+		for _, name := range List(group) {
+			col := ""
+			for _, f := range e.Fields {
+				if f.Name == name || (f.Name == "" && f.Assoc != nil && f.Assoc.Name == name) {
+					col = f.Column
+				}
+			}
+			if col == "" {
+				return fmt.Errorf("index: unknown field %q", name)
+			}
+			cols = append(cols, col)
+		}
+		if len(cols) == 0 {
+			return fmt.Errorf("index: empty group in %q", v)
+		}
+		e.Indexes = append(e.Indexes, &IndexDef{Name: schema.IdentifierName("idx", e.Table, cols), Columns: cols})
+	}
+	return nil
 }
 
 var (
@@ -710,6 +741,9 @@ func (r *Registry) resolve(e *Entity) error {
 			a.JoinTable.JoinColumns = []JoinColumn{{Name: src, Referenced: srcID.Column, OnDelete: "CASCADE"}}
 			a.JoinTable.InverseJoinColumns = []JoinColumn{{Name: tgt, Referenced: tgtID.Column, OnDelete: "CASCADE"}}
 		}
+	}
+	if err := e.entityIndexes(e.indexSpec); err != nil {
+		return &MappingError{Entity: e.Name, Msg: err.Error()}
 	}
 	e.index()
 	// Validate bidirectional pairs once both sides are known.
