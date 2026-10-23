@@ -110,12 +110,12 @@ func (%[1]s *%[4]s) %[3]s() %[5]s {
 }
 
 // Set%[3]s sets the %[2]s.
-func (%[1]s *%[4]s) Set%[3]s(v %[5]s) *%[4]s {
+func (%[1]s *%[4]s) Set%[3]s(%[7]s %[5]s) *%[4]s {
 	%[6]s.Touch(%[1]s)
-	%[1]s.%[2]s = v
+	%[1]s.%[2]s = %[7]s
 	return %[1]s
 }
-`, r, field, up, entity, typ, root)
+`, r, field, up, entity, typ, root, param(r))
 	return w.file(entity).AddDecls(src)
 }
 

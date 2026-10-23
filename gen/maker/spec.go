@@ -296,6 +296,15 @@ func (w *writer) fieldName(prop string) string {
 
 func recv(entity string) string { return strings.ToLower(entity[:1]) }
 
+// param names the parameter of a setter; it must differ from the receiver
+// (entities starting with V would get "v" twice).
+func param(receiver string) string {
+	if receiver == "v" {
+		return "value"
+	}
+	return "v"
+}
+
 var errExists = errors.New("already exists")
 
 func (w *writer) checkFree(entity, prop string) error {

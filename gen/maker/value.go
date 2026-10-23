@@ -97,11 +97,11 @@ func (w *writer) addValueField(name string, f FieldSpec) error {
 func (%[1]s *%[4]s) %[3]s() %[5]s { return %[1]s.%[2]s }
 
 // Set%[3]s sets the %[2]s.
-func (%[1]s *%[4]s) Set%[3]s(v %[5]s) *%[4]s {
-	%[1]s.%[2]s = v
+func (%[1]s *%[4]s) Set%[3]s(%[6]s %[5]s) *%[4]s {
+	%[1]s.%[2]s = %[6]s
 	return %[1]s
 }
-`, r, field, up, name, typ))
+`, r, field, up, name, typ, param(r)))
 }
 
 // addEmbedded adds an embeddable field to an entity.

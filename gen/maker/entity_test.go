@@ -88,3 +88,15 @@ func TestMakeEntityErrors(t *testing.T) {
 		t.Fatal("guessType")
 	}
 }
+
+// Entities starting with V have the receiver v; their setters must not
+// name the parameter v as well.
+func TestMakeEntityReceiverV(t *testing.T) {
+	dir := tempModule(t)
+	entDir := filepath.Join(dir, "entity")
+	out, code := runMaker(t, entDir, "no\ntitle\n\n100\nno\nno\n\n", "Vote")
+	if code != 0 {
+		t.Fatalf("code %d\n%s", code, out)
+	}
+	goCmd(t, dir, "vet", "./...")
+}
