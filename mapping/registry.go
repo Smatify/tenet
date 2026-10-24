@@ -166,6 +166,10 @@ var fieldOptions = map[string]bool{
 	"embedded": true, "prefix": true, "noprefix": true,
 }
 
+func isInteger(n types.Name) bool {
+	return n == types.SmallInt || n == types.Integer || n == types.BigInt
+}
+
 func (r *Registry) parse(t reflect.Type) (*Entity, error) {
 	if t.Kind() != reflect.Struct {
 		return nil, &MappingError{Entity: t.String(), Msg: "entities must be structs"}
@@ -246,12 +250,17 @@ func (r *Registry) parse(t reflect.Type) (*Entity, error) {
 	for _, f := range e.ID {
 		f.Nullable = false
 	}
+	var generated []*Field
 	for _, f := range e.Fields {
 		if f.generator == "" {
 			continue
 		}
 		if !f.ID {
-			return nil, errf(f.Name, "generated is only allowed on identifier fields")
+			if f.generator != GenIdentity || !isInteger(f.Type.Name()) {
+				return nil, errf(f.Name, "fields other than the identifier can only be generated:identity integers")
+			}
+			generated = append(generated, f)
+			continue
 		}
 		e.Generator = f.generator
 	}
@@ -259,7 +268,7 @@ func (r *Registry) parse(t reflect.Type) (*Entity, error) {
 		e.Generator = GenNone
 		if id := e.SingleID(); id != nil {
 			switch {
-			case id.Type.Name() == types.SmallInt || id.Type.Name() == types.Integer || id.Type.Name() == types.BigInt:
+			case isInteger(id.Type.Name()):
 				e.Generator = GenIdentity
 			case id.GoType == reflect.TypeFor[uuid.UUID]():
 				e.Generator = GenUUIDv7
@@ -268,6 +277,16 @@ func (r *Registry) parse(t reflect.Type) (*Entity, error) {
 	}
 	if e.Generator == GenSequence && e.Sequence == "" {
 		e.Sequence = e.Table + "_seq"
+	}
+	for i, f := range generated {
+		if i > 0 || e.Generator == GenIdentity {
+			return nil, errf(f.Name, "a table has at most one identity column (the identifier counts if it is generated)")
+		}
+		f.Generated, f.Nullable = true, false
+		// MySQL needs a key on it, and the numbers are unique anyway.
+		if !slices.ContainsFunc(e.Indexes, func(d *IndexDef) bool { return d.Unique && slices.Equal(d.Columns, []string{f.Column}) }) {
+			e.Indexes = append(e.Indexes, &IndexDef{Name: schema.IdentifierName("uniq", e.Table, []string{f.Column}), Columns: []string{f.Column}, Unique: true})
+		}
 	}
 	seen := map[string]string{}
 	for _, f := range e.Fields {

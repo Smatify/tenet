@@ -89,9 +89,8 @@ func TestIndexStatements(t *testing.T) {
 func TestColumnDeclarationVariants(t *testing.T) {
 	tbl := &Table{Name: "t"}
 	c := &Column{Name: "x", Type: types.Integer, AutoIncrement: true, Default: new(string)}
-	got, _ := ddlFor(dialect.SQLite).ColumnDeclaration(tbl, c) // no PK: no rowid alias
-	if got != `"x" INTEGER NOT NULL` {
-		t.Fatalf("got %s", got)
+	if _, err := ddlFor(dialect.SQLite).ColumnDeclaration(tbl, c); err == nil { // no PK: no rowid alias
+		t.Fatal("SQLite auto increment outside the primary key")
 	}
 	raw := &Column{Name: "geo", RawType: "GEOMETRY", Nullable: true}
 	if got, _ := ddlFor(dialect.Postgres).ColumnDeclaration(tbl, raw); got != `"geo" GEOMETRY NULL` {

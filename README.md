@@ -48,6 +48,9 @@ See [examples/blog](examples/blog) for a complete project generated this way.
 
 - **Mapping** with struct tags: `smorm:"length:200,unique"`, `smorm:"manyToOne,inversedBy:posts"`.
   Entities embed `smorm.Entity`; traits `smorm.IntID`, `smorm.UUIDID`, `smorm.Timestamps`.
+  `smorm:"generated:identity"` on an integer field other than the identifier lets the
+  database number new rows (a public number next to a UUID; unique, read back on
+  insert, not on SQLite; a table has at most one identity column).
 - **Doctrine style** (default of `make:entity`): unexported fields with generated
   getters that call `smorm.Touch` for lazy loading. **Go style**: exported fields and `smorm.Ref[T]`.
 - **Unit of work**: `Persist`, `Remove`, `Flush`, `Refresh`, `Detach`, `Clear`,

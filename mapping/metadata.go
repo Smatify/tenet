@@ -183,6 +183,10 @@ type Field struct {
 	ID       bool
 	Version  bool
 	Exported bool
+	// Generated columns (generated:identity on a field other than the
+	// identifier) get their value from the database when it is zero on
+	// insert.
+	Generated bool
 	// Assoc is set for join columns of owning to-one associations.
 	Assoc *Association
 

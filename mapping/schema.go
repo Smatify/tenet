@@ -32,6 +32,7 @@ func BuildSchema(entities []*Entity) *schema.Schema {
 			c.Nullable = f.Nullable
 			c.Default = f.Default
 			c.Comment = f.Comment
+			c.AutoIncrement = f.Generated
 			if f.ID {
 				pk = append(pk, f.Column)
 				c.AutoIncrement = e.Generator == GenIdentity && len(e.ID) == 1

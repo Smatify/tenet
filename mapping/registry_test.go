@@ -293,6 +293,12 @@ type NullConflict struct {
 	ID int
 	S  string `smorm:"nullable,notnull"`
 }
+type TwoIdentities struct {
+	entity.Header
+	ID     int
+	Number int64 `smorm:"generated:identity"`
+}
+
 type GenOnNonID struct {
 	entity.Header
 	ID int
@@ -448,7 +454,8 @@ func TestInvalidMappings(t *testing.T) {
 		{BadPrecision{}, "precision must"},
 		{BadScale{}, "scale must"},
 		{NullConflict{}, "mutually exclusive"},
-		{GenOnNonID{}, "only allowed on identifier"},
+		{GenOnNonID{}, "can only be generated:identity integers"},
+		{TwoIdentities{}, "at most one identity column"},
 		{BadGen{}, "unknown generator"},
 		{TwoVersions{}, "already has version"},
 		{MixedIndex{}, "both unique and non-unique"},
@@ -559,5 +566,28 @@ func TestEntityIndexes(t *testing.T) {
 	}
 	if _, err := For[bad](NewRegistry()); err == nil || !strings.Contains(err.Error(), `unknown field "missing"`) {
 		t.Fatalf("err = %v", err)
+	}
+}
+
+type NumberedPost struct {
+	entity.Header
+	ID     uuid.UUID `smorm:"id"`
+	Number int64     `smorm:"generated:identity"`
+}
+
+func TestGeneratedField(t *testing.T) {
+	e, err := NewRegistry().Get(reflect.TypeFor[NumberedPost]())
+	if err != nil {
+		t.Fatal(err)
+	}
+	f := e.Field("Number")
+	if !f.Generated || f.Nullable || e.Generator != GenUUIDv7 {
+		t.Fatalf("field = %+v, generator %s", f, e.Generator)
+	}
+	if len(e.Indexes) != 1 || !e.Indexes[0].Unique || e.Indexes[0].Columns[0] != "number" {
+		t.Fatalf("indexes = %+v", e.Indexes)
+	}
+	if c := BuildSchema([]*Entity{e}).Table("numbered_post").Column("number"); !c.AutoIncrement {
+		t.Fatal("column must be auto increment")
 	}
 }

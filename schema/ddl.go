@@ -52,6 +52,33 @@ func (g *DDL) sqliteRowID(t *Table, c *Column) bool {
 		len(t.PrimaryKey.Columns) == 1 && strings.EqualFold(t.PrimaryKey.Columns[0], c.Name)
 }
 
+// mysqlAutoKey returns the index MySQL needs inline for an AUTO_INCREMENT
+// column that is not the primary key ("there can be only one auto column
+// and it must be defined as a key"), or nil.
+func (g *DDL) mysqlAutoKey(t *Table) *Index {
+	if !g.isMySQL() {
+		return nil
+	}
+	for _, c := range t.Columns {
+		if !c.AutoIncrement || (t.PrimaryKey != nil && strings.EqualFold(t.PrimaryKey.Columns[0], c.Name)) {
+			continue
+		}
+		for _, i := range t.Indexes {
+			if strings.EqualFold(i.Columns[0], c.Name) {
+				return i
+			}
+		}
+	}
+	return nil
+}
+
+func (g *DDL) indexDefinition(i *Index) string {
+	if i.Unique {
+		return "UNIQUE INDEX " + g.q(i.Name) + " (" + g.qList(i.Columns) + ")"
+	}
+	return "INDEX " + g.q(i.Name) + " (" + g.qList(i.Columns) + ")"
+}
+
 // DefaultConstraintName returns the SQL Server default constraint name.
 func DefaultConstraintName(table, column string) string {
 	return IdentifierName("df", table, []string{column})
@@ -61,6 +88,9 @@ func DefaultConstraintName(table, column string) string {
 func (g *DDL) ColumnDeclaration(t *Table, c *Column) (string, error) {
 	if g.sqliteRowID(t, c) {
 		return g.q(c.Name) + " INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL", nil
+	}
+	if c.AutoIncrement && g.name() == dialect.SQLite {
+		return "", fmt.Errorf("schema: SQLite generates values only for an INTEGER PRIMARY KEY, not for %s.%s", t.Name, c.Name)
 	}
 	typ, err := g.TypeDeclaration(c)
 	if err != nil {
@@ -106,7 +136,9 @@ func (g *DDL) CreateTable(t *Table) ([]string, error) {
 	}
 	out := []string{stmt}
 	for _, i := range t.Indexes {
-		out = append(out, g.CreateIndex(t.Name, i))
+		if i != g.mysqlAutoKey(t) {
+			out = append(out, g.CreateIndex(t.Name, i))
+		}
 	}
 	return append(out, g.comments(t)...), nil
 }
@@ -155,6 +187,9 @@ func (g *DDL) createTableStmt(t *Table, name string) (string, error) {
 		for _, fk := range t.ForeignKeys {
 			defs = append(defs, g.foreignKeyDefinition(fk))
 		}
+	}
+	if i := g.mysqlAutoKey(t); i != nil {
+		defs = append(defs, g.indexDefinition(i))
 	}
 	stmt := "CREATE TABLE " + g.q(name) + " (" + strings.Join(defs, ", ") + ")"
 	if g.isMySQL() {
