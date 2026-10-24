@@ -60,5 +60,25 @@ See [examples/blog](examples/blog) for a complete project generated this way.
   entity does not have, and field accesses without `smorm.Touch`.
 - **Migrations**: versioned Go or SQL files, `make:migration` diffs entities against the database.
 
+## Lazy loading
+
+A getter calls `smorm.Touch`; if the entity is an uninitialized reference
+(loaded as the target of a to-one association) or a `Collection` that was not
+preloaded, it is loaded then, with the context of `smorm.WithContext` /
+`em.SetContext`. Touching one reference loads up to `WithBatchSize` (default
+100) uninitialized references of the same type in one query, so a list of
+posts does not query the author of each post separately.
+
+- `With(...)` on a query or `em.Preload` loads associations up front; prefer
+  it for everything a page or job is known to need.
+- A failed lazy load panics with `*smorm.LazyLoadError` (getters return no
+  error). `smorm.RecoverLazyLoad` turns it into a 500 response,
+  `smorm.CatchLazy` into an error; `smorm.Load(ctx, ptr)` loads explicitly and
+  returns the error.
+- `smorm.WithoutLazyLoading()` makes every lazy load panic with
+  `ErrLazyLoadingDisabled`: use it in tests to find missing `With(...)`.
+- `smorm.WithLazyLoadHook(func(l smorm.LazyLoad) {...})` is called before each
+  lazy load with the entity and the calling frame, e.g. to log them.
+
 The name `smorm` is defined once in `internal/brand`; `scripts/rebrand.sh <name>`
 renames the whole project.

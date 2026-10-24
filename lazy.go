@@ -28,10 +28,19 @@ type LazyLoadError = orm.LazyLoadError
 // ErrDetached is wrapped by LazyLoadError for entities whose manager is gone.
 var ErrDetached = orm.ErrDetached
 
+// ErrLazyLoadingDisabled is wrapped by LazyLoadError when an entity manager
+// created WithoutLazyLoading would have to load lazily.
+var ErrLazyLoadingDisabled = orm.ErrLazyLoadingDisabled
+
+// LazyLoad describes a lazy load for WithLazyLoadHook.
+type LazyLoad = orm.LazyLoad
+
 // Lazy loading options.
 var (
-	WithContext   = orm.WithContext
-	WithBatchSize = orm.WithBatchSize
+	WithContext        = orm.WithContext
+	WithBatchSize      = orm.WithBatchSize
+	WithoutLazyLoading = orm.WithoutLazyLoading
+	WithLazyLoadHook   = orm.WithLazyLoadHook
 )
 
 // CatchLazy runs fn and converts a lazy loading panic into an error.

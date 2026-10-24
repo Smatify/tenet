@@ -26,6 +26,8 @@ type EntityManager struct {
 	events    *EventManager
 	ctx       context.Context
 	batchSize int
+	noLazy    bool
+	lazyHook  func(LazyLoad)
 	filters   *Filters
 	cache     cache.Cache
 	// resolving is set while references are loaded: a reference points to

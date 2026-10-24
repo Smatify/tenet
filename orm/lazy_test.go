@@ -109,3 +109,37 @@ func TestLoadAndCatch(t *testing.T) {
 		t.Fatal("other panics are re-raised")
 	}
 }
+
+func TestWithoutLazyLoading(t *testing.T) {
+	ctx := context.Background()
+	em, rec := newUnitEM(t, dialect.Postgres)
+	if err := em.reg.Register(qAuthor{}); err != nil {
+		t.Fatal(err)
+	}
+	WithoutLazyLoading()(em)
+	var loads []LazyLoad
+	WithLazyLoadHook(func(l LazyLoad) { loads = append(loads, l) })(em)
+	ref, _ := em.Reference(typeOf[qAuthor](), 1)
+	err := panicErr(func() { entity.Touch(ref) })
+	if !errors.Is(err, ErrLazyLoadingDisabled) || !strings.Contains(err.Error(), "With(") {
+		t.Fatalf("touch = %v", err)
+	}
+	// Caller skips smorm frames, which includes this test.
+	if len(loads) != 1 || loads[0].Entity != "qAuthor" || loads[0].ID != int64(1) || loads[0].Caller.Function != "testing.tRunner" {
+		t.Fatalf("hook = %+v", loads)
+	}
+
+	// Load is explicit and still loads; the collection is not.
+	rec.Returns(`FROM "qa"`, []string{"id", "name"}, []driver.Value{int64(1), "Ann"})
+	if err := Load(ctx, ref); err != nil {
+		t.Fatal(err, rec.Queries())
+	}
+	a := ref.(*qAuthor)
+	if a.Name != "Ann" || len(loads) != 1 {
+		t.Fatalf("Load: %q %d", a.Name, len(loads))
+	}
+	err = panicErr(func() { a.Books.All() })
+	if !errors.Is(err, ErrLazyLoadingDisabled) || !strings.Contains(err.Error(), "qAuthor.Books") || len(loads) != 2 {
+		t.Fatalf("collection = %v %+v", err, loads)
+	}
+}

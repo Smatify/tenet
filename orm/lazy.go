@@ -4,6 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"reflect"
+	"runtime"
+	"strings"
 
 	"github.com/smatify/smorm/dbal"
 	"github.com/smatify/smorm/internal/brand"
@@ -13,6 +16,10 @@ import (
 // ErrDetached is wrapped by LazyLoadError when an entity is used after its
 // entity manager was cleared, closed or garbage collected.
 var ErrDetached = errors.New(brand.Name + ": entity is detached from its entity manager")
+
+// ErrLazyLoadingDisabled is wrapped by LazyLoadError when a getter touches an
+// uninitialized reference of an entity manager created WithoutLazyLoading.
+var ErrLazyLoadingDisabled = errors.New("lazy loading is disabled; preload it with Query.With(...) or EntityManager.Preload")
 
 // LazyLoadError is the panic value raised when a getter touches a reference
 // that cannot be loaded. Recover it with CatchLazy or the HTTP middleware,
@@ -40,6 +47,48 @@ func WithContext(ctx context.Context) Option { return func(em *EntityManager) { 
 // WithBatchSize sets the lazy loading batch size (1 disables batching).
 func WithBatchSize(n int) Option { return func(em *EntityManager) { em.batchSize = max(n, 1) } }
 
+// WithoutLazyLoading makes touching an uninitialized reference or collection
+// panic with ErrLazyLoadingDisabled instead of loading it. Use it in tests
+// to find the associations a page or job should preload. Load still loads.
+func WithoutLazyLoading() Option { return func(em *EntityManager) { em.noLazy = true } }
+
+// LazyLoad describes a lazy load for WithLazyLoadHook.
+type LazyLoad struct {
+	Entity string        // "Post", or "Post.tags" for a collection
+	ID     any           // of the entity, or of the collection owner
+	Caller runtime.Frame // first frame outside smorm and the entity's package
+}
+
+// WithLazyLoadHook calls fn before every lazy load triggered by a getter
+// (not by Load), e.g. to log the queries that a With(...) would batch.
+func WithLazyLoadHook(fn func(LazyLoad)) Option { return func(em *EntityManager) { em.lazyHook = fn } }
+
+var modulePath = strings.TrimSuffix(reflect.TypeFor[EntityManager]().PkgPath(), "/orm")
+
+// lazy is called before every implicit load of an entity of type t.
+func (em *EntityManager) lazy(name string, id any, t reflect.Type) error {
+	if em.lazyHook != nil {
+		em.lazyHook(LazyLoad{Entity: name, ID: id, Caller: caller(t.PkgPath())})
+	}
+	if em.noLazy {
+		return ErrLazyLoadingDisabled
+	}
+	return nil
+}
+
+func caller(entityPkg string) runtime.Frame {
+	pcs := make([]uintptr, 32)
+	frames := runtime.CallersFrames(pcs[:runtime.Callers(3, pcs)])
+	for {
+		f, more := frames.Next()
+		inside := strings.HasPrefix(f.Function, modulePath+".") || strings.HasPrefix(f.Function, modulePath+"/") ||
+			strings.HasPrefix(f.Function, entityPkg+".")
+		if !inside || !more {
+			return f
+		}
+	}
+}
+
 // SetContext replaces the lazy loading context.
 func (em *EntityManager) SetContext(ctx context.Context) { em.ctx = ctx }
 
@@ -58,6 +107,9 @@ func (e *entry) EnsureLoaded() {
 	}
 	if em.closed {
 		panic(&LazyLoadError{Entity: e.meta.Name, ID: e.key, Err: ErrClosed})
+	}
+	if err := em.lazy(e.meta.Name, e.key, e.meta.GoType); err != nil {
+		panic(&LazyLoadError{Entity: e.meta.Name, ID: e.key, Err: err})
 	}
 	if err := em.initialize(em.ctx, e); err != nil {
 		panic(&LazyLoadError{Entity: e.meta.Name, ID: e.key, Err: err})

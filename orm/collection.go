@@ -42,7 +42,13 @@ func (c *Collection[T]) ensure() {
 	if c.IsInitialized() {
 		return
 	}
-	if err := c.load(c.st.owner.manager().lazyContext()); err != nil {
+	st := c.st
+	if em := st.owner.manager(); em != nil && !em.closed {
+		if err := em.lazy(st.owner.meta.Name+"."+st.assoc.Name, st.owner.key, st.owner.meta.GoType); err != nil {
+			panic(&LazyLoadError{Entity: st.owner.meta.Name + "." + st.assoc.Name, ID: st.owner.key, Err: err})
+		}
+	}
+	if err := c.load(st.owner.manager().lazyContext()); err != nil {
 		panic(err)
 	}
 }
