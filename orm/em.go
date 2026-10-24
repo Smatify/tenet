@@ -160,6 +160,22 @@ func idValues(meta *mapping.Entity, ptr any) []any {
 	return out
 }
 
+// entityKey returns the identity map key of ptr, or nil while an identifier
+// is unset. A single identifier needs no slice.
+func entityKey(meta *mapping.Entity, ptr any) any {
+	if len(meta.ID) == 1 {
+		v := meta.Accessor().Get(ptr, meta.ID[0].Pos)
+		if isZeroID(v) {
+			return nil
+		}
+		return normalizeKey(v)
+	}
+	if id := idValues(meta, ptr); hasID(id) {
+		return idKey(id)
+	}
+	return nil
+}
+
 func hasID(vals []any) bool {
 	for _, v := range vals {
 		if isZeroID(v) {
@@ -349,11 +365,10 @@ func (em *EntityManager) scheduleInsert(meta *mapping.Entity, ptr any) error {
 	if err := assignPreInsertID(meta, ptr); err != nil {
 		return err
 	}
-	var key any
-	if id := idValues(meta, ptr); hasID(id) {
-		key = idKey(id)
+	key := entityKey(meta, ptr)
+	if key != nil {
 		if other := em.lookup(meta, key); other != nil && other.ptr != ptr {
-			return fmt.Errorf("%s: another entity with identifier %v is already managed", meta.Name, id)
+			return fmt.Errorf("%s: another entity with identifier %v is already managed", meta.Name, idValues(meta, ptr))
 		}
 	} else if meta.Generator == mapping.GenNone {
 		return fmt.Errorf("%s: entities with application assigned identifiers need the ID set before Persist", meta.Name)
@@ -468,6 +483,28 @@ func (em *EntityManager) cascade(e *entry, op mapping.Cascade, fn func(*mapping.
 
 // related returns the entities held by association a of ptr (without
 // loading lazy collections).
+// relatedOne returns the first entity association a of ptr points to, or
+// nil; unlike related it allocates nothing for to-one associations.
+func relatedOne(meta *mapping.Entity, ptr any, a *mapping.Association) any {
+	switch a.Container {
+	case mapping.ContainerPointer:
+		v := meta.Accessor().GetAssoc(ptr, a.Pos)
+		if v == nil || reflect.ValueOf(v).IsNil() {
+			return nil
+		}
+		return v
+	case mapping.ContainerRef:
+		if p := meta.Accessor().AssocAddr(ptr, a.Pos).(refValue).refPtr(); p != nil {
+			return p
+		}
+		return nil
+	}
+	if rel := related(meta, ptr, a); len(rel) > 0 {
+		return rel[0]
+	}
+	return nil
+}
+
 func related(meta *mapping.Entity, ptr any, a *mapping.Association) []any {
 	acc := meta.Accessor()
 	switch a.Container {

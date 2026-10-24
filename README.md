@@ -80,7 +80,9 @@ preloaded, it is loaded then, with the context of `smorm.WithContext` /
 posts does not query the author of each post separately.
 
 - `With(...)` on a query or `em.Preload` loads associations up front; prefer
-  it for everything a page or job is known to need.
+  it for everything a page or job is known to need. `With` joins owning to-one
+  associations into the query itself (`LEFT JOIN`, no second statement) unless
+  the query locks rows, joins a collection or the target has an active filter.
 - A failed lazy load panics with `*smorm.LazyLoadError` (getters return no
   error). `smorm.RecoverLazyLoad` turns it into a 500 response,
   `smorm.CatchLazy` into an error; `smorm.Load(ctx, ptr)` loads explicitly and
@@ -100,28 +102,30 @@ Time per operation (lower is better):
 
 | | smorm | GORM | bun | ent | sqlc |
 |---|---:|---:|---:|---:|---:|
-| Insert 1 row¹ | 161 µs | 158 µs | 84 µs | 82 µs | 76 µs |
-| Insert 100 rows² | 1.73 ms | 1.54 ms | 1.46 ms | 1.57 ms | 7.11 ms |
-| Insert 1000 rows² | 15.4 ms | 14.5 ms | 13.5 ms | 15.1 ms | 68.7 ms |
-| Find by ID | 59 µs | 60 µs | 158 µs | 57 µs | 54 µs |
-| Load 100 rows with their author | 451 µs | 382 µs | 297 µs | 300 µs | 185 µs |
-| Update one field of 100 loaded rows³ | 831 µs | 6.32 ms | 930 µs | 11.9 ms | 5.98 ms |
+| Insert 1 row¹ | 86 µs | 158 µs | 84 µs | 82 µs | 76 µs |
+| Insert 100 rows² | 1.66 ms | 1.54 ms | 1.46 ms | 1.57 ms | 7.11 ms |
+| Insert 1000 rows² | 15.9 ms | 14.5 ms | 13.5 ms | 15.1 ms | 68.7 ms |
+| Find by ID | 60 µs | 60 µs | 158 µs | 57 µs | 54 µs |
+| Load 100 rows with their author⁴ | 404 µs | 382 µs | 297 µs | 300 µs | 185 µs |
+| Update one field of 100 loaded rows³ | 740 µs | 6.32 ms | 930 µs | 11.9 ms | 5.98 ms |
 
 Allocations per operation:
 
 | | smorm | GORM | bun | ent | sqlc |
 |---|---:|---:|---:|---:|---:|
-| Insert 1 row¹ | 106 | 86 | 21 | 70 | 18 |
-| Insert 100 rows² | 2,948 | 1,103 | 321 | 3,779 | 2,312 |
-| Insert 1000 rows² | 29,857 | 11,775 | 3,773 | 38,767 | 23,763 |
-| Find by ID | 101 | 73 | 47 | 94 | 25 |
-| Load 100 rows with their author | 3,139 | 2,467 | 644 | 1,802 | 534 |
-| Update one field of 100 loaded rows³ | 5,881 | 5,635 | 438 | 11,504 | 1,089 |
+| Insert 1 row¹ | 69 | 86 | 21 | 70 | 18 |
+| Insert 100 rows² | 1,737 | 1,103 | 321 | 3,779 | 2,312 |
+| Insert 1000 rows² | 17,035 | 11,775 | 3,773 | 38,767 | 23,763 |
+| Find by ID | 79 | 73 | 47 | 94 | 25 |
+| Load 100 rows with their author⁴ | 2,242 | 2,467 | 644 | 1,802 | 534 |
+| Update one field of 100 loaded rows³ | 3,202 | 5,635 | 438 | 11,504 | 1,089 |
 
-¹ smorm and GORM write in a transaction (BEGIN, INSERT, COMMIT).
+¹ GORM writes in a transaction (BEGIN, INSERT, COMMIT); smorm leaves it out when a flush
+is one statement without post hooks.
 ² Multi-row INSERT for all but sqlc, which inserts row by row in a transaction.
 ³ smorm and bun send one `UPDATE ... FROM (VALUES ...)` (smorm finds the changed
 column itself); the others one UPDATE per row in a transaction.
+⁴ smorm joins the author into the query (`With` on a to-one association).
 
 The name `smorm` is defined once in `internal/brand`; `scripts/rebrand.sh <name>`
 renames the whole project.

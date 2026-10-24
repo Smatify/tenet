@@ -139,7 +139,7 @@ func TestReturningAndTimestamps(t *testing.T) {
 	if s.updated.Unix() != 200 || s.created.Unix() != 100 {
 		t.Fatal("TouchUpdated")
 	}
-	if q := rec.Queries(); len(q) != 3 || !strings.Contains(q[1], `"updated"`) || !strings.Contains(q[1], `"name"`) {
+	if q := rec.Queries(); len(q) != 1 || !strings.Contains(q[0], `"updated"`) || !strings.Contains(q[0], `"name"`) {
 		t.Fatalf("update = %v", q)
 	}
 }
@@ -287,5 +287,58 @@ func TestBatchInsert(t *testing.T) {
 	}
 	if inserts != 3 { // 3 columns -> 500 rows per statement
 		t.Fatalf("inserts = %d", inserts)
+	}
+}
+
+type hookedAuthor struct {
+	entity.Header `smorm:"table:ha"`
+	ID            int64
+	Name          string
+}
+
+func (*hookedAuthor) PostPersist(context.Context) error { return nil }
+
+func TestSingleStatementFlushWithoutTransaction(t *testing.T) {
+	ctx := context.Background()
+	em, rec := newUnitEM(t, dialect.MySQL)
+	a := &uAuthor{Name: "a"}
+	if err := em.Persist(a); err != nil {
+		t.Fatal(err)
+	}
+	if err := em.Flush(ctx); err != nil {
+		t.Fatal(err)
+	}
+	a.Name = "b"
+	if err := em.Flush(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if err := em.Remove(a); err != nil {
+		t.Fatal(err)
+	}
+	if err := em.Flush(ctx); err != nil {
+		t.Fatal(err)
+	}
+	want := []string{
+		"INSERT INTO `a` (`name`) VALUES (?)",
+		"UPDATE `a` SET `name` = ? WHERE (`id` = ?)",
+		"DELETE FROM `a` WHERE (`id` = ?)",
+	}
+	if q := rec.Queries(); !slices.Equal(q, want) {
+		t.Fatalf("got\n%s", strings.Join(q, "\n"))
+	}
+
+	// A post hook could fail after the write: the flush keeps its transaction.
+	if err := em.Registry().Register(hookedAuthor{}); err != nil {
+		t.Fatal(err)
+	}
+	rec.Reset()
+	if err := em.Persist(&hookedAuthor{Name: "h"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := em.Flush(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if q := rec.Queries(); len(q) != 3 || q[0] != "BEGIN" || q[2] != "COMMIT" {
+		t.Fatalf("got\n%s", strings.Join(q, "\n"))
 	}
 }

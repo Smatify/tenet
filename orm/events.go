@@ -46,18 +46,26 @@ type (
 // database representation (e.g. JSON as text).
 type ChangeSet struct {
 	fields []*mapping.Field
-	old    map[string]any
-	new    map[string]any
+	vals   []any // old and new value of fields[i] at 2i and 2i+1
 }
 
 func newChangeSet(e *entry, changed []*mapping.Field, vals []any) *ChangeSet {
-	cs := &ChangeSet{fields: changed, old: map[string]any{}, new: map[string]any{}}
-	for _, f := range changed {
-		name := fieldName(f)
-		cs.old[name] = e.snapshot[f.Pos]
-		cs.new[name] = vals[f.Pos]
+	cs := &ChangeSet{fields: changed, vals: make([]any, 2*len(changed))}
+	for i, f := range changed {
+		cs.vals[2*i] = e.snapshot[f.Pos]
+		cs.vals[2*i+1] = vals[f.Pos]
 	}
 	return cs
+}
+
+// index returns the position of field in fields, or -1.
+func (c *ChangeSet) index(field string) int {
+	for i, f := range c.fields {
+		if fieldName(f) == field {
+			return i
+		}
+	}
+	return -1
 }
 
 // fieldName is the Go field name, or the association name for join columns.
@@ -78,13 +86,23 @@ func (c *ChangeSet) Fields() []string {
 }
 
 // Has reports whether field changed.
-func (c *ChangeSet) Has(field string) bool { _, ok := c.old[field]; return ok }
+func (c *ChangeSet) Has(field string) bool { return c.index(field) >= 0 }
 
 // Old returns the previous database value of field.
-func (c *ChangeSet) Old(field string) any { return c.old[field] }
+func (c *ChangeSet) Old(field string) any {
+	if i := c.index(field); i >= 0 {
+		return c.vals[2*i]
+	}
+	return nil
+}
 
 // New returns the new database value of field.
-func (c *ChangeSet) New(field string) any { return c.new[field] }
+func (c *ChangeSet) New(field string) any {
+	if i := c.index(field); i >= 0 {
+		return c.vals[2*i+1]
+	}
+	return nil
+}
 
 // Event names for EventManager listeners.
 type Event string

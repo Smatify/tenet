@@ -6,13 +6,15 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/smatify/smorm"
 	"github.com/smatify/smorm/dbal"
 	"github.com/smatify/smorm/dialect"
 )
 
 func init() {
 	Register(Case{"ORM/BatchInsert", testORMBatch}, Case{"ORM/BatchInsertIdentity", testORMBatchIdentity},
-		Case{"ORM/BatchUpdate", testORMBatchUpdate})
+		Case{"ORM/BatchUpdate", testORMBatchUpdate},
+		Case{"ORM/FetchJoin", testORMFetchJoin})
 }
 
 // Entities with identity identifiers are inserted with one statement on
@@ -82,6 +84,42 @@ func testORMBatchUpdate(t *testing.T, db *dbal.DB) {
 		if name != want {
 			t.Fatalf("row %d: name %q, want %q", i, name, want)
 		}
+	}
+}
+
+// With on owning to-one associations joins the targets into the query: one
+// statement, targets initialized, a NULL association stays nil.
+func testORMFetchJoin(t *testing.T, db *dbal.DB) {
+	ctx := context.Background()
+	newEM := setupORM(t, db)
+	em := newEM()
+	ann, bob := &ormAuthor{name: "ann"}, &ormAuthor{name: "bob"}
+	must(t, em.Persist(ann))
+	must(t, em.Persist(&ormBook{title: "a", author: ann, editor: bob}))
+	must(t, em.Persist(&ormBook{title: "b", author: bob}))
+	must(t, em.Flush(ctx))
+
+	selects := 0
+	db.AddQueryHook(dbal.QueryHookFuncs{After: func(_ context.Context, ev *dbal.QueryEvent) {
+		if ev.Operation == "SELECT" {
+			selects++
+		}
+	}})
+	em = newEM()
+	books, err := smorm.NewQuery[ormBook](em).With("author", "editor").OrderBy("title", smorm.Asc).All(ctx)
+	must(t, err)
+	if selects != 1 {
+		t.Fatalf("selects = %d, want 1", selects)
+	}
+	if len(books) != 2 || books[0].author.name != "ann" || books[0].editor.name != "bob" ||
+		books[1].author != books[0].editor || books[1].editor != nil {
+		t.Fatalf("books = %+v", books)
+	}
+	// Unchanged after loading: nothing to write.
+	selects = 0
+	must(t, em.Flush(ctx))
+	if selects != 0 {
+		t.Fatalf("flush selected %d times", selects)
 	}
 }
 

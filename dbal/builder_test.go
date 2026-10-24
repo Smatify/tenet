@@ -422,3 +422,25 @@ func TestQueryConstructorsOnTxAndConn(t *testing.T) {
 		}
 	}
 }
+
+// Quoted identifiers are cached per dialect: the same name quotes
+// differently for each.
+func TestWriteIdentPerDialect(t *testing.T) {
+	for range 2 { // the second round reads the cache
+		for _, tc := range []struct {
+			d    dialect.Dialect
+			want string
+		}{
+			{testdialect.Like(dialect.Postgres), `"u"."na""me", "u".*`},
+			{testdialect.Like(dialect.MySQL), "`u`.`na\"me`, `u`.*"},
+		} {
+			w := NewSQLWriter(tc.d)
+			w.WriteIdent(`u.na"me`)
+			w.WriteString(", ")
+			w.WriteIdent("u.*")
+			if got := w.String(); got != tc.want {
+				t.Fatalf("%s: got %s, want %s", tc.d.Name(), got, tc.want)
+			}
+		}
+	}
+}

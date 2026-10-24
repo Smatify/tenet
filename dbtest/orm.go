@@ -155,6 +155,17 @@ func testORMCrud(t *testing.T, db *dbal.DB) {
 	if lb.author != loaded || lb.editor != nil {
 		t.Fatal("manyToOne must resolve through the identity map")
 	}
+	// Freshly hydrated entities (NULL editor, JSON, timestamps) are unchanged.
+	checking, writes := true, 0
+	db.AddQueryHook(dbal.QueryHookFuncs{After: func(_ context.Context, ev *dbal.QueryEvent) {
+		if checking && ev.Operation != "SELECT" {
+			writes++
+		}
+	}})
+	must(t, em2.Flush(ctx))
+	if checking = false; writes != 0 {
+		t.Fatalf("flush of loaded entities wrote %d statements", writes)
+	}
 	// Update: only changed columns, updated_at advances.
 	var updates []string
 	db.AddQueryHook(dbal.QueryHookFuncs{After: func(_ context.Context, ev *dbal.QueryEvent) {

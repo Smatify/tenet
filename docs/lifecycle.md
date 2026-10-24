@@ -30,6 +30,9 @@
    join tables, deletes. `postPersist`, `postUpdate` and `postRemove` run
    right after the write of each entity, **inside the transaction**: an
    error returned there rolls everything back.
+   A flush that writes a single statement of a single-table entity and has
+   no such hook or listener runs without a transaction (one round trip
+   instead of three); the statement is atomic on its own.
 5. After the commit: snapshots are taken (the entities count as unchanged)
    and `postFlush` runs once.
 

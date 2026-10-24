@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"iter"
 	"reflect"
+	"slices"
+	"strconv"
 	"strings"
 
 	"github.com/smatify/smorm/dbal"
@@ -311,10 +313,7 @@ func (q *Query) buildMode(count, refs bool) (*dbal.SelectQuery, error) {
 	case refs:
 		out = inner.Column(idCol, RootAlias+"."+meta.DiscriminatorColumn)
 	default:
-		out = inner
-		for _, f := range meta.Fields {
-			out.Column(RootAlias + "." + f.Column)
-		}
+		out = inner.ColumnExprs(entityColumns(meta, RootAlias)...)
 		if q.hasToManyJoin() {
 			out.Distinct()
 		}
@@ -426,11 +425,63 @@ func (q *Query) All(ctx context.Context) ([]any, error) {
 	if err != nil {
 		return nil, err
 	}
-	res, err = q.em.loadQuery(ctx, q.meta, s, nil)
-	if err != nil || len(q.with) == 0 || len(res) == 0 {
+	with := q.with
+	if joins := q.fetchJoins(); len(joins) > 0 {
+		with = make([]string, 0, len(q.with))
+		for _, w := range q.with {
+			if !slices.ContainsFunc(joins, func(a *mapping.Association) bool { return a.Name == w }) {
+				with = append(with, w)
+			}
+		}
+		q.addFetchJoins(s, joins)
+		res, err = q.em.loadJoined(ctx, q.meta, s, joins)
+	} else {
+		res, err = q.em.loadQuery(ctx, q.meta, s, nil)
+	}
+	if err != nil || len(with) == 0 || len(res) == 0 {
 		return res, err
 	}
-	return res, q.em.Preload(ctx, res, q.with...)
+	return res, q.em.Preload(ctx, res, with...)
+}
+
+// fetchJoins returns the associations in q.with that All loads with a LEFT
+// JOIN in the same statement instead of a second query: owning to-one
+// associations to a single-table entity without active filters, keyed by
+// its identifier. Queries that lock rows or join collections preload them
+// as usual.
+func (q *Query) fetchJoins() []*mapping.Association {
+	if len(q.with) == 0 || q.lock != dbal.LockNone || q.hasToManyJoin() || q.meta.SingleID() == nil {
+		return nil
+	}
+	var out []*mapping.Association
+	for _, w := range q.with {
+		a := q.meta.Assoc(w)
+		if a == nil || !a.Kind.IsToOne() || !a.Owning || len(a.JoinColumns) != 1 || slices.Contains(out, a) ||
+			(a.Container != mapping.ContainerPointer && a.Container != mapping.ContainerRef) {
+			continue
+		}
+		t := a.Target
+		if t.IsPolymorphic() || t.Inheritance != "" || len(t.Tables()) != 1 || t.SingleID() == nil ||
+			t.SingleID().Column != a.JoinColumns[0].Referenced || len(q.em.filterCondsExcept(t, "", q.without)) > 0 {
+			continue
+		}
+		out = append(out, a)
+	}
+	return out
+}
+
+// fetchAlias is the alias of the i-th fetch join.
+func fetchAlias(i int) string { return RootAlias + "_f" + strconv.Itoa(i) }
+
+// addFetchJoins adds the LEFT JOINs and target columns of joins to s.
+func (q *Query) addFetchJoins(s *dbal.SelectQuery, joins []*mapping.Association) {
+	for i, a := range joins {
+		alias := fetchAlias(i)
+		jc := a.JoinColumns[0]
+		s.Join("LEFT JOIN ? AS ? ON ? = ?", q.em.source(a.Target), dbal.Ident(alias),
+			dbal.Ident(alias+"."+jc.Referenced), dbal.Ident(RootAlias+"."+jc.Name))
+		s.ColumnExprs(entityColumns(a.Target, alias)...)
+	}
 }
 
 // One returns the first matching entity or ErrNotFound.

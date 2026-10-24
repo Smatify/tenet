@@ -47,11 +47,7 @@ func (em *EntityManager) fieldDBValue(e *entry, f *mapping.Field) (any, error) {
 
 // assocTarget returns the entity a to-one association points to, or nil.
 func (em *EntityManager) assocTarget(e *entry, a *mapping.Association) any {
-	rel := related(e.meta, e.ptr, a)
-	if len(rel) == 0 {
-		return nil
-	}
-	return rel[0]
+	return relatedOne(e.meta, e.ptr, a)
 }
 
 func (em *EntityManager) dbValues(e *entry) ([]any, error) {
@@ -147,7 +143,16 @@ func (em *EntityManager) discoverNew() error {
 			continue
 		}
 		for _, a := range e.meta.Assocs {
-			for _, p := range related(e.meta, e.ptr, a) {
+			var one [1]any
+			rel := one[:0]
+			if a.Kind.IsToOne() {
+				if t := relatedOne(e.meta, e.ptr, a); t != nil {
+					rel = append(rel, t)
+				}
+			} else {
+				rel = related(e.meta, e.ptr, a)
+			}
+			for _, p := range rel {
 				if c := em.entryOf(a.Target, p); c != nil && c.state != StateDetached {
 					continue
 				}
@@ -268,7 +273,7 @@ func (em *EntityManager) Flush(ctx context.Context) error {
 			}
 			for _, e := range batch {
 				if e.key == nil {
-					em.register(e, idKey(idValues(e.meta, e.ptr)))
+					em.register(e, entityKey(e.meta, e.ptr))
 				}
 				if err := em.lifecycle(ctx, EventPostPersist, e, nil); err != nil {
 					return err
@@ -329,7 +334,7 @@ func (em *EntityManager) Flush(ctx context.Context) error {
 		}
 		return nil
 	}
-	if _, inTx := em.db.(*dbal.Tx); inTx {
+	if _, inTx := em.db.(*dbal.Tx); inTx || em.singleStatement(ordered, updates, deleteOrder, len(joins)+len(nullify)) {
 		err = run(ctx, em.db)
 	} else {
 		err = em.db.RunInTx(ctx, nil, func(ctx context.Context, tx *dbal.Tx) error { return run(ctx, tx) })
@@ -385,14 +390,20 @@ func (em *EntityManager) prepareUpdate(ctx context.Context, e *entry, now time.T
 	if err != nil || len(changed) == 0 {
 		return nil, err
 	}
-	if err := em.lifecycle(ctx, EventPreUpdate, e, newChangeSet(e, changed, vals)); err != nil {
-		return nil, err
+	_, hook := e.ptr.(PreUpdater)
+	if hook = hook || em.events.Has(EventPreUpdate); hook {
+		if err := em.lifecycle(ctx, EventPreUpdate, e, newChangeSet(e, changed, vals)); err != nil {
+			return nil, err
+		}
 	}
-	if t, ok := e.ptr.(mapping.UpdatedToucher); ok {
+	t, touch := e.ptr.(mapping.UpdatedToucher)
+	if touch {
 		t.TouchUpdated(now)
 	}
-	if changed, vals, err = em.changes(e); err != nil || len(changed) == 0 {
-		return nil, err
+	if hook || touch { // they may have changed fields
+		if changed, vals, err = em.changes(e); err != nil || len(changed) == 0 {
+			return nil, err
+		}
 	}
 	if v := e.meta.Version; v != nil && !(len(changed) == 1 && changed[0] == v) {
 		em.bumpVersion(e)
@@ -598,6 +609,37 @@ func (em *EntityManager) updateTable(ctx context.Context, db dbal.IDB, e *entry,
 	return nil
 }
 
+// singleStatement reports whether a flush writes exactly one statement and
+// runs no post hooks or listeners that could fail after it. Such a flush
+// needs no transaction: the statement is atomic on its own.
+func (em *EntityManager) singleStatement(inserts []*entry, updates []update, removes []*entry, other int) bool {
+	if other > 0 || len(inserts)+len(updates)+len(removes) != 1 {
+		return false
+	}
+	var e *entry
+	var ev Event
+	var hook bool
+	switch {
+	case len(inserts) == 1:
+		e, ev = inserts[0], EventPostPersist
+		_, hook = e.ptr.(PostPersister)
+		if len(e.deferred) > 0 || e.meta.Generator == mapping.GenSequence {
+			return false
+		}
+	case len(updates) == 1:
+		e, ev = updates[0].e, EventPostUpdate
+		_, hook = e.ptr.(PostUpdater)
+		if updates[0].soft {
+			ev = EventPostRemove
+			_, hook = e.ptr.(PostRemover)
+		}
+	default:
+		e, ev = removes[0], EventPostRemove
+		_, hook = e.ptr.(PostRemover)
+	}
+	return !hook && !em.events.Has(ev) && len(e.meta.Tables()) == 1
+}
+
 // updateBatchLen returns how many updates from the start of us can be
 // written with one statement: on Postgres, consecutive updates of the same
 // single-table, single-identifier entity without a version field that
@@ -664,7 +706,7 @@ func (em *EntityManager) updateBatch(ctx context.Context, db dbal.IDB, us []upda
 				var v any
 				var err error
 				if i == 0 {
-					v, err = idf.Type.ToDatabase(convertTo(idValues(meta, u.e.ptr)[0], idf.GoType), d.Name())
+					v, err = idf.Type.ToDatabase(convertTo(u.e.key, idf.GoType), d.Name())
 				} else {
 					v, err = em.fieldDBValue(u.e, f)
 				}
@@ -734,20 +776,29 @@ func batchable(e *entry, d dialect.Dialect) bool {
 	if len(e.deferred) > 0 || e.meta.Inheritance != "" {
 		return false
 	}
-	generated := generatedFields(e.meta)
-	if len(generated) == 0 {
+	n := 0
+	for _, f := range e.meta.Fields {
+		if isGenerated(e.meta, f) {
+			n++
+		}
+	}
+	if n == 0 {
 		return true
 	}
-	if d.Name() != dialect.Postgres || len(generated) == len(e.meta.Fields) {
+	if d.Name() != dialect.Postgres || n == len(e.meta.Fields) {
 		return false // no column to insert: INSERT ... DEFAULT VALUES
 	}
 	acc := e.meta.Accessor()
-	for _, f := range generated {
-		if !isZeroID(acc.Get(e.ptr, f.Pos)) {
+	for _, f := range e.meta.Fields {
+		if isGenerated(e.meta, f) && !isZeroID(acc.Get(e.ptr, f.Pos)) {
 			return false // an explicit value: insert it on its own
 		}
 	}
 	return true
+}
+
+func isGenerated(meta *mapping.Entity, f *mapping.Field) bool {
+	return f.Generated || (f.ID && meta.Generator == mapping.GenIdentity && len(meta.ID) == 1)
 }
 
 // generatedFields returns the fields whose values the database generates on
@@ -755,7 +806,7 @@ func batchable(e *entry, d dialect.Dialect) bool {
 func generatedFields(meta *mapping.Entity) []*mapping.Field {
 	var out []*mapping.Field
 	for _, f := range meta.Fields {
-		if f.Generated || (f.ID && meta.Generator == mapping.GenIdentity && meta.SingleID() != nil) {
+		if isGenerated(meta, f) {
 			out = append(out, f)
 		}
 	}

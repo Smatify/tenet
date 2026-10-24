@@ -114,6 +114,12 @@ func (q *SelectQuery) Column(names ...string) *SelectQuery {
 	return q
 }
 
+// ColumnExprs adds column expressions.
+func (q *SelectQuery) ColumnExprs(es ...Expr) *SelectQuery {
+	q.columns = append(q.columns, es...)
+	return q
+}
+
 // ColumnExpr adds a column expression.
 func (q *SelectQuery) ColumnExpr(query string, args ...any) *SelectQuery {
 	q.columns = append(q.columns, SQL(query, args...))

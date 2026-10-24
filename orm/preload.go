@@ -60,11 +60,9 @@ func (em *EntityManager) preloadAssoc(ctx context.Context, a *mapping.Associatio
 		var targets []any
 		seen := map[any]bool{}
 		for _, o := range owners {
-			for _, t := range related(a.Source, o, a) {
-				if !seen[t] {
-					seen[t] = true
-					targets = append(targets, t)
-				}
+			if t := relatedOne(a.Source, o, a); t != nil && !seen[t] {
+				seen[t] = true
+				targets = append(targets, t)
 			}
 		}
 		return targets, em.resolve(func() error { return em.initializeAll(ctx, a.Target, targets) })
@@ -84,7 +82,14 @@ func (em *EntityManager) initializeAll(ctx context.Context, meta *mapping.Entity
 				}
 				continue
 			}
-			pending = append(pending, idArg{f: idf, v: meta.Accessor().Get(p, idf.Pos)})
+			id := e.key // the normalized identifier, already boxed
+			if id == nil {
+				id = meta.Accessor().Get(p, idf.Pos)
+			}
+			if pending == nil {
+				pending = make([]any, 0, len(ptrs))
+			}
+			pending = append(pending, idArg{f: idf, v: id})
 		}
 	}
 	for len(pending) > 0 {

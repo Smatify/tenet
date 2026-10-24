@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"fmt"
 	"reflect"
+	"sync"
 
 	"github.com/smatify/smorm/dbal"
 	"github.com/smatify/smorm/mapping"
@@ -37,17 +38,49 @@ func (a idArg) AppendSQL(w *dbal.SQLWriter) error {
 
 // selectEntity builds SELECT <all columns> FROM <table> [AS alias].
 func (em *EntityManager) selectEntity(meta *mapping.Entity, alias string) *dbal.SelectQuery {
-	q := em.db.NewSelect()
-	for _, f := range meta.Fields {
+	q := em.db.NewSelect().ColumnExprs(entityColumns(meta, alias)...)
+	em.fromEntity(q, meta, alias)
+	return q
+}
+
+// columnCache holds the column lists built by entityColumns.
+var (
+	columnMu    sync.RWMutex
+	columnCache = map[columnKey][]dbal.Expr{}
+)
+
+type columnKey struct {
+	meta  *mapping.Entity
+	alias string
+}
+
+// entityColumns returns the columns of meta, qualified with alias. The
+// result is shared and must not be modified.
+func entityColumns(meta *mapping.Entity, alias string) []dbal.Expr {
+	k := columnKey{meta, alias}
+	columnMu.RLock()
+	cols, ok := columnCache[k]
+	columnMu.RUnlock()
+	if ok {
+		return cols
+	}
+	cols = make([]dbal.Expr, len(meta.Fields))
+	for i, f := range meta.Fields {
 		col := f.Column
 		if alias != "" {
 			col = alias + "." + col
 		}
-		q.Column(col)
+		cols[i] = dbal.Ident(col)
 	}
-	em.fromEntity(q, meta, alias)
-	return q
+	columnMu.Lock()
+	if len(columnCache) < maxColumnLists {
+		columnCache[k] = cols
+	}
+	columnMu.Unlock()
+	return cols
 }
+
+const maxColumnLists = 4096
 
 // loadWhere selects entities of meta matching where. When into is given the
 // single result is written into that entry (refresh/initialize).
@@ -111,6 +144,84 @@ func (em *EntityManager) loadQuery(ctx context.Context, meta *mapping.Entity, q 
 	return out, nil
 }
 
+// loadJoined is loadQuery for a statement that selects the columns of
+// meta followed by those of the targets of joins (see Query.fetchJoins).
+// Each target is hydrated from its columns unless its identifier is NULL.
+func (em *EntityManager) loadJoined(ctx context.Context, meta *mapping.Entity, q *dbal.SelectQuery, joins []*mapping.Association) ([]any, error) {
+	rows, err := q.Rows(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	h := em.newHydrator(meta)
+	hs := make([]*hydrator, len(joins))
+	for i, a := range joins {
+		hs[i] = em.newHydrator(a.Target)
+		hs[i].outer = true
+	}
+	defer func() {
+		h.pending = nil
+		for _, j := range hs {
+			j.pending = nil
+		}
+	}()
+	var out []any
+	var dests []any
+	targets := make([][]any, len(joins))
+	for rows.Next() {
+		h.prepare()
+		for _, j := range hs {
+			j.prepare()
+		}
+		if dests == nil {
+			dests = append(dests, h.dests...)
+			for _, j := range hs {
+				dests = append(dests, j.dests...)
+			}
+		}
+		if err := rows.Scan(dests...); err != nil {
+			return nil, err
+		}
+		ptr, err := h.process(ctx, nil, true)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, ptr)
+		for i, j := range hs {
+			if j.slots[j.meta.ID[0].Pos].holder.Elem().IsNil() {
+				continue // no target
+			}
+			t, err := j.process(ctx, nil, true)
+			if err != nil {
+				return nil, err
+			}
+			targets[i] = append(targets[i], t)
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	rows.Close()
+	for _, j := range append(hs, h) {
+		if err := em.resolvePending(ctx, j.pending); err != nil {
+			return nil, err
+		}
+	}
+	if len(out) > 0 {
+		if err := em.preloadEager(ctx, meta, out); err != nil {
+			return nil, err
+		}
+	}
+	for i, a := range joins {
+		if len(targets[i]) > 0 {
+			if err := em.preloadEager(ctx, a.Target, targets[i]); err != nil {
+				return nil, err
+			}
+		}
+	}
+	return out, nil
+}
+
 // hydrator turns rows with the columns of meta.Fields (in order) into entities.
 type hydrator struct {
 	em      *EntityManager
@@ -118,6 +229,7 @@ type hydrator struct {
 	slots   []slot
 	dests   []any
 	pending []pendingRef // to-one associations to polymorphic targets
+	outer   bool         // columns of a LEFT JOIN: every column may be NULL
 }
 
 type pendingRef struct {
@@ -151,7 +263,7 @@ func (h *hydrator) prepare() {
 	for i, f := range h.meta.Fields {
 		t := f.GoType
 		s := slot{f: f}
-		if f.Assoc != nil || (t.Kind() != reflect.Pointer && f.Nullable) {
+		if f.Assoc != nil || (t.Kind() != reflect.Pointer && (f.Nullable || h.outer)) {
 			// Scan nullable non-pointer values (and foreign keys) through *T.
 			if t.Kind() != reflect.Pointer {
 				t = reflect.PointerTo(t)
@@ -187,11 +299,16 @@ func (h *hydrator) values(ctx context.Context, vals []any, force *entry) (any, e
 
 // process fills the entity from the scanned slots.
 func (h *hydrator) process(ctx context.Context, force *entry, cacheIt bool) (any, error) {
-	id := make([]any, len(h.meta.ID))
-	for i, f := range h.meta.ID {
-		id[i] = h.slots[f.Pos].holder.Elem().Interface()
+	var key any
+	if len(h.meta.ID) == 1 {
+		key = normalizeKey(h.slots[h.meta.ID[0].Pos].holder.Elem().Interface())
+	} else {
+		id := make([]any, len(h.meta.ID))
+		for i, f := range h.meta.ID {
+			id[i] = h.slots[f.Pos].holder.Elem().Interface()
+		}
+		key = idKey(id)
 	}
-	key := idKey(id)
 	em := h.em
 	e := force
 	if e == nil {
@@ -209,27 +326,55 @@ func (h *hydrator) process(ctx context.Context, force *entry, cacheIt bool) (any
 		em.register(e, key)
 	}
 	acc := h.meta.Accessor()
-	for _, s := range h.slots {
+	d := em.db.Dialect().Name()
+	// The snapshot is taken from the scanned values where possible, which
+	// saves reading (and boxing) every field again.
+	snapshot := make([]any, len(h.slots))
+	later := false // fields whose snapshot needs the hydrated entity
+	for i, s := range h.slots {
 		v := s.holder.Elem()
 		if s.f.Assoc != nil {
 			h.setAssoc(e, s.f.Assoc, v)
+			later = true
 			continue
 		}
 		if s.deref {
 			if v.IsNil() {
 				acc.Set(e.ptr, s.f.Pos, nil)
+				later = true
 				continue
 			}
 			v = v.Elem()
 		}
-		acc.Set(e.ptr, s.f.Pos, v.Interface())
+		val := v.Interface()
+		acc.Set(e.ptr, s.f.Pos, val)
+		if s.f.NullZero && v.IsZero() {
+			continue
+		}
+		dbv, err := s.f.Type.ToDatabase(val, d)
+		if err != nil {
+			return nil, fmt.Errorf("%s.%s: %w", h.meta.Name, s.f.Column, err)
+		}
+		snapshot[i] = cloneValue(dbv)
 	}
 	e.initialized = true
 	e.state = StateManaged
 	em.wireCollections(e)
-	if err := em.takeSnapshot(e); err != nil {
-		return nil, err
+	for i, s := range h.slots {
+		if !later {
+			break
+		}
+		if s.f.Assoc == nil && !(s.deref && s.holder.Elem().IsNil()) {
+			continue
+		}
+		f := s.f
+		dbv, err := em.fieldDBValue(e, f)
+		if err != nil {
+			return nil, fmt.Errorf("%s.%s: %w", h.meta.Name, f.Column, err)
+		}
+		snapshot[i] = cloneValue(dbv)
 	}
+	e.snapshot = snapshot
 	if cacheIt {
 		em.cachePut(e)
 	}

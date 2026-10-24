@@ -3,7 +3,10 @@
 // so applications only pull in the drivers they need.
 package dialect
 
-import "strconv"
+import (
+	"strconv"
+	"sync"
+)
 
 // Name identifies a dialect.
 type Name string
@@ -111,7 +114,22 @@ func QuoteWith(ident string, open, close byte) string {
 func QuestionPlaceholder(int) string { return "?" }
 
 // DollarPlaceholder returns "$n".
-func DollarPlaceholder(n int) string { return "$" + strconv.Itoa(n) }
+func DollarPlaceholder(n int) string {
+	if t := dollarPlaceholders(); n > 0 && n <= len(t) {
+		return t[n-1]
+	}
+	return "$" + strconv.Itoa(n)
+}
+
+// dollarPlaceholders holds "$1" to "$2048", so that writing a statement
+// with many parameters does not allocate one string per parameter.
+var dollarPlaceholders = sync.OnceValue(func() []string {
+	t := make([]string, 2048)
+	for i := range t {
+		t[i] = "$" + strconv.Itoa(i+1)
+	}
+	return t
+})
 
 // AtPPlaceholder returns "@pn" (MSSQL).
 func AtPPlaceholder(n int) string { return "@p" + strconv.Itoa(n) }

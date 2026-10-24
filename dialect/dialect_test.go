@@ -1,6 +1,9 @@
 package dialect
 
-import "testing"
+import (
+	"strconv"
+	"testing"
+)
 
 func TestQuoteWith(t *testing.T) {
 	tests := []struct{ in, open, close, want string }{
@@ -41,5 +44,13 @@ func TestFeatureHas(t *testing.T) {
 	f := FeatureCTE | FeatureReturning
 	if !f.Has(FeatureCTE) || !f.Has(FeatureCTE|FeatureReturning) || f.Has(FeatureMerge) {
 		t.Fatal("Has is wrong")
+	}
+}
+
+func TestDollarPlaceholder(t *testing.T) {
+	for _, n := range []int{1, 9, 10, 2048, 2049, 70000} {
+		if got, want := DollarPlaceholder(n), "$"+strconv.Itoa(n); got != want {
+			t.Fatalf("DollarPlaceholder(%d) = %q", n, got)
+		}
 	}
 }

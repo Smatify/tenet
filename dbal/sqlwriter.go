@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"reflect"
 	"strings"
+	"sync"
 
 	"github.com/smatify/smorm/dialect"
 )
@@ -42,16 +43,56 @@ func (w *SQLWriter) WriteByte(c byte) error { return w.buf.WriteByte(c) }
 // WriteIdent appends a quoted identifier. Dots separate qualifiers
 // ("u.name" -> "u"."name") and a trailing "*" is kept unquoted.
 func (w *SQLWriter) WriteIdent(name string) {
-	for i, part := range strings.Split(name, ".") {
+	for i := 0; ; i++ {
+		part, rest, more := strings.Cut(name, ".")
 		if i > 0 {
 			w.buf.WriteByte('.')
 		}
 		if part == "*" {
 			w.buf.WriteByte('*')
-			continue
+		} else {
+			w.buf.WriteString(quoteIdent(w.d, part))
 		}
-		w.buf.WriteString(w.d.QuoteIdent(part))
+		if !more {
+			return
+		}
+		name = rest
 	}
+}
+
+// quoted caches quoted identifiers per dialect; identifiers come from the
+// mapping and queries, so the set is small. It stops growing at maxQuoted
+// entries in case an application builds identifiers dynamically.
+var (
+	quotedMu sync.RWMutex
+	quoted   = map[quoteKey]string{}
+)
+
+const maxQuoted = 8192
+
+type quoteKey struct {
+	d     dialect.Dialect
+	ident string
+}
+
+func quoteIdent(d dialect.Dialect, ident string) string {
+	if !reflect.TypeOf(d).Comparable() {
+		return d.QuoteIdent(ident)
+	}
+	k := quoteKey{d, ident}
+	quotedMu.RLock()
+	q, ok := quoted[k]
+	quotedMu.RUnlock()
+	if ok {
+		return q
+	}
+	q = d.QuoteIdent(ident)
+	quotedMu.Lock()
+	if len(quoted) < maxQuoted {
+		quoted[k] = q
+	}
+	quotedMu.Unlock()
+	return q
 }
 
 // WriteArg appends a bind placeholder for v. Expr values are rendered inline.
