@@ -43,6 +43,7 @@ See [examples/blog](examples/blog) for a complete project generated this way.
 | `github.com/smatify/smorm` | entity manager, mapping, DBAL + SQL builder, schema tools, migrations, console (no dependencies) |
 | `.../dialect/{pg,mysql,sqlite,mssql}dialect` | dialects (drivers are chosen by the application) |
 | `.../gen` | code generator, maker (`make:*`), `smorm` CLI |
+| `.../bench` | benchmarks against GORM, bun, ent and sqlc (not a dependency of anything) |
 
 ## Concepts
 
@@ -88,6 +89,26 @@ posts does not query the author of each post separately.
   `ErrLazyLoadingDisabled`: use it in tests to find missing `With(...)`.
 - `smorm.WithLazyLoadHook(func(l smorm.LazyLoad) {...})` is called before each
   lazy load with the entity and the calling frame, e.g. to log them.
+
+## Benchmarks
+
+`make bench` runs [bench](bench) against Postgres 17 in a container. Microseconds
+per operation (allocations), all libraries on `database/sql` with pgx, Go 1.27,
+AMD Ryzen 9 7950X3D, GORM 1.31, bun 1.3, ent 0.14, sqlc 1.31:
+
+| | smorm | GORM | bun | ent | sqlc |
+|---|---:|---:|---:|---:|---:|
+| Insert 1 row¹ | 161 (106) | 158 (86) | 84 (21) | 82 (70) | 76 (18) |
+| Insert 100 rows² | 1,734 (2,948) | 1,541 (1,103) | 1,460 (321) | 1,572 (3,779) | 7,108 (2,312) |
+| Insert 1000 rows² | 15,439 (29,857) | 14,499 (11,775) | 13,543 (3,773) | 15,083 (38,767) | 68,728 (23,763) |
+| Find by ID | 59 (101) | 60 (73) | 158 (47) | 57 (94) | 54 (25) |
+| Load 100 rows with their author | 451 (3,139) | 382 (2,467) | 297 (644) | 300 (1,802) | 185 (534) |
+| Update one field of 100 loaded rows³ | 6,556 (8,000) | 6,319 (5,635) | 930 (438) | 11,924 (11,504) | 5,981 (1,089) |
+
+¹ smorm and GORM write in a transaction (BEGIN, INSERT, COMMIT).
+² Multi-row INSERT for all but sqlc, which inserts row by row in a transaction.
+³ bun sends one `UPDATE ... FROM (VALUES ...)`; the others one UPDATE per row in a
+transaction (smorm finds the changed column itself).
 
 The name `smorm` is defined once in `internal/brand`; `scripts/rebrand.sh <name>`
 renames the whole project.

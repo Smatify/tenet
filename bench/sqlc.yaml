@@ -1,0 +1,9 @@
+version: "2"
+sql:
+  - engine: postgresql
+    schema: schema.sql
+    queries: sqlcdb/queries.sql
+    gen:
+      go:
+        package: sqlcdb
+        out: sqlcdb

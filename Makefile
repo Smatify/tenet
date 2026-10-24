@@ -1,6 +1,6 @@
 MODULES := . gen examples/blog extra/smormotel $(patsubst %/go.mod,%,$(wildcard dialect/*/go.mod))
 
-.PHONY: test test-short lint fmt tidy cover
+.PHONY: test test-short lint fmt tidy cover bench
 
 test:
 	@for m in $(MODULES); do (cd $$m && go test -race -count=1 -timeout 10m ./...) || exit 1; done
@@ -21,3 +21,6 @@ tidy:
 
 cover:
 	go test -coverprofile=coverage.out ./... && go tool cover -func=coverage.out | tail -1
+
+bench:
+	cd bench && GOWORK=off go test -run '^$$' -bench . -benchmem
