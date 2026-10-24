@@ -26,8 +26,8 @@ type mappedField struct {
 
 // Accessors adds the getters and setters that are missing for the mapped
 // unexported fields of the entities in Dir (collection methods for to-many
-// associations), e.g. after fields were added by hand. Existing methods are
-// kept; with entities given only those are completed. It returns the
+// associations without a getter), e.g. after fields were added by hand.
+// Existing methods are kept; with entities given only those are completed. It returns the
 // added methods as "Entity.Method".
 func (mk *Maker) Accessors(entities ...string) ([]string, error) {
 	fields, existing, err := scanEntities(mk.Dir)
@@ -64,6 +64,9 @@ func (mk *Maker) Accessors(entities ...string) ([]string, error) {
 				return nil, err
 			}
 			continue
+		}
+		if existing[f.entity+"."+upper(f.name)] {
+			continue // a collection with its getter is maintained by hand
 		}
 		onAdd, onRemove := syncHooks(f, planned)
 		if err := w.collectionMethods(f.entity, f.name, f.target, onAdd, onRemove); err != nil {

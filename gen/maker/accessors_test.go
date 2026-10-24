@@ -26,7 +26,12 @@ type Team struct {
 	title   string                    ` + "`smorm:\"length:50\"`" + `
 	players smorm.Collection[Player]  ` + "`smorm:\"oneToMany,mappedBy:team\"`" + `
 	cache   string                    ` + "`smorm:\"-\"`" + `
+	members smorm.Collection[Player]  ` + "`smorm:\"manyToMany\"`" + `
 }
+
+// Title is written by hand and kept; so are the members, whose getter
+// exists (no SetMembers is added).
+func (t *Team) Members() []*Player { smorm.Touch(t); return t.members.All() }
 
 // Title is written by hand and kept.
 func (t *Team) Title() string { smorm.Touch(t); return "team " + t.title }
