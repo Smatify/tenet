@@ -66,6 +66,9 @@ See [examples/blog](examples/blog) for a complete project generated this way.
   a slice after `IN` is expanded, anywhere else (`= ANY(?)`) it is one array parameter.
 - **Migrations**: versioned Go or SQL files, `make:migration` diffs entities against the database.
 
+Identifiers, the order of events within `Flush`, transactions, listeners
+for committed changes and soft delete: [docs/lifecycle.md](docs/lifecycle.md).
+
 ## Lazy loading
 
 A getter calls `smorm.Touch`; if the entity is an uninitialized reference

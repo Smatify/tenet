@@ -1,0 +1,104 @@
+# Lifecycle of entities and flushes
+
+## Entity manager
+
+- An `EntityManager` is a unit of work: an identity map of the loaded
+  entities and the changes to write. It is **not safe for concurrent use**;
+  create one per HTTP request, job or goroutine.
+- It stores a context (`smorm.WithContext(ctx)`, `em.SetContext(ctx)`) for
+  lazy loading, because getters take no context. Methods with a `ctx`
+  argument use that one for the call itself.
+- A failed `Flush` closes it (`IsOpen()` is false, everything returns
+  `ErrClosed`): the database rolled back, but the entities still hold the
+  changes. Start over with a new entity manager.
+
+## Identifiers
+
+- `Persist` assigns UUID identifiers (`smorm.UUIDID`, `generated:uuid7`)
+  immediately, so a new entity can be referenced by ID before the flush.
+- Integer identities (`smorm.IntID`), sequences and `generated:identity`
+  fields get their value from the database during `Flush`.
+
+## Order within Flush
+
+1. `prePersist` for every new entity (also those reached through
+   `cascade:persist`).
+2. Change sets are computed: `preUpdate` for changed entities (changes made
+   there are written too), `preRemove` for removed ones.
+3. `onFlush` once, if there is anything to write.
+4. The writes in one transaction, in dependency order: inserts, updates,
+   join tables, deletes. `postPersist`, `postUpdate` and `postRemove` run
+   right after the write of each entity, **inside the transaction**: an
+   error returned there rolls everything back.
+5. After the commit: snapshots are taken (the entities count as unchanged)
+   and `postFlush` runs once.
+
+If the writes fail, the transaction is rolled back, the entity manager is
+closed and `onRollback` runs instead of `postFlush`.
+
+`em.Transactional(ctx, fn)` runs `fn` and a final flush in one transaction.
+`postFlush` of every flush inside runs after that transaction commits;
+if it rolls back, `onRollback` runs. An entity manager created on a
+transaction you opened yourself (`dbal.Tx`) cannot know when you commit:
+its `postFlush` runs after the writes, before your commit.
+
+## Events
+
+Entities may implement hooks (`PrePersist(ctx) error`, `PreUpdate(ctx, *ChangeSet) error`,
+`PostLoad(ctx) error`, ...). Listeners for all entities go to an
+`EventManager`, which many entity managers share:
+
+```go
+events := smorm.NewEventManager()
+em := smorm.NewEntityManager(db, smorm.WithContext(ctx), smorm.WithEvents(events))
+```
+
+Listeners get the entity manager in `args.EM`. Work that must only happen
+for committed data outside the database (search index, cache
+invalidation, messages) collects in the post events and acts in `postFlush`,
+keyed by the entity manager, and forgets on `onRollback`:
+
+```go
+var mu sync.Mutex
+changed := map[*smorm.EntityManager][]any{}
+
+events.On(func(ctx context.Context, a *smorm.EventArgs) error {
+	mu.Lock()
+	defer mu.Unlock()
+	changed[a.EM] = append(changed[a.EM], a.Entity)
+	return nil
+}, smorm.EventPostPersist, smorm.EventPostUpdate, smorm.EventPostRemove)
+
+events.On(func(ctx context.Context, a *smorm.EventArgs) error {
+	mu.Lock()
+	items := changed[a.EM]
+	delete(changed, a.EM)
+	mu.Unlock()
+	return index.Update(ctx, items) // committed: safe to publish
+}, smorm.EventPostFlush)
+
+events.On(func(ctx context.Context, a *smorm.EventArgs) error {
+	mu.Lock()
+	delete(changed, a.EM)
+	mu.Unlock()
+	return nil
+}, smorm.EventOnRollback)
+```
+
+An error returned from `postFlush` is returned by `Flush`, but the data is
+committed already.
+
+## Soft delete
+
+Entities with `smorm.SoftDelete` get a `deleted_at` column and the
+`smorm.SoftDeleteFilterName` filter:
+
+- `Remove` sets `deleted_at` (an UPDATE, followed by `postRemove`); the
+  entity leaves the entity manager.
+- Queries and collections hide deleted rows. `Query.WithDeleted()` shows
+  them for one query, `em.Filters().Disable(smorm.SoftDeleteFilterName)` for the
+  entity manager.
+- References to a deleted row still load (an audit entry keeps showing the
+  deleted record it refers to).
+- `Remove` of an entity that is already deleted (loaded with
+  `WithDeleted`) deletes the row.
