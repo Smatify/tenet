@@ -85,6 +85,14 @@ func testORMBatchUpdate(t *testing.T, db *dbal.DB) {
 			t.Fatalf("row %d: name %q, want %q", i, name, want)
 		}
 	}
+	// A value too long for its column fails like a single UPDATE instead of
+	// being cut to the column length.
+	cats[0].Name, cats[1].Name = strings.Repeat("x", 51), "short"
+	if err := em.Flush(ctx); err == nil && db.Dialect().Name() != dialect.SQLite {
+		var name string
+		must(t, db.NewSelect().Column("name").Table("orm_category").Where("id = ?", cats[0].ID).Scan(ctx, &name))
+		t.Fatalf("too long value accepted, stored %q", name)
+	}
 }
 
 // With on owning to-one associations joins the targets into the query: one

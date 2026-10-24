@@ -11,6 +11,7 @@ import (
 	"github.com/smatify/smorm/dbal"
 	"github.com/smatify/smorm/dialect"
 	"github.com/smatify/smorm/mapping"
+	"github.com/smatify/smorm/types"
 	"github.com/smatify/smorm/uuid"
 )
 
@@ -674,6 +675,11 @@ func (em *EntityManager) updateBatch(ctx context.Context, db dbal.IDB, us []upda
 	casts := make([]string, len(fields))
 	for i, f := range fields {
 		casts[i] = "::" + f.Type.SQLDeclaration(d.Name(), f.Options)
+		if f.Type.Name() == types.String {
+			// A cast to VARCHAR(n) or CHAR(n) silently cuts longer values;
+			// as TEXT the column rejects them like a single UPDATE.
+			casts[i] = "::TEXT"
+		}
 	}
 	var set, cols bytes.Buffer
 	for i, f := range fields {
