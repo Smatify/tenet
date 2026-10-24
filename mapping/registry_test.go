@@ -3,6 +3,7 @@ package mapping
 import (
 	"database/sql"
 	"errors"
+	"fmt"
 	"reflect"
 	"slices"
 	"strings"
@@ -589,5 +590,39 @@ func TestGeneratedField(t *testing.T) {
 	}
 	if c := BuildSchema([]*Entity{e}).Table("numbered_post").Column("number"); !c.AutoIncrement {
 		t.Fatal("column must be auto increment")
+	}
+}
+
+type IndexedComment struct {
+	entity.Header `smorm:"table:indexed_comment"`
+	ID            int64
+	module        string `smorm:"index:idx_place"`
+	author        *User  `smorm:"manyToOne,index"`
+	post          *User  `smorm:"manyToOne,index:idx_place"`
+	owner         *User  `smorm:"manyToOne,unique"`
+}
+
+func TestAssociationIndexes(t *testing.T) {
+	e, err := For[IndexedComment](NewRegistry())
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got []string
+	for _, d := range e.Indexes {
+		got = append(got, fmt.Sprintf("%s=%s/%v", d.Name, strings.Join(d.Columns, ","), d.Unique))
+	}
+	want := []string{"idx_place=module,post_id/false", "idx_indexed_comment_author_id=author_id/false", "uniq_indexed_comment_owner_id=owner_id/true"}
+	slices.Sort(got)
+	slices.Sort(want)
+	if !slices.Equal(got, want) {
+		t.Fatalf("indexes = %v", got)
+	}
+	type bad struct {
+		entity.Header
+		ID      int64
+		authors []*User `smorm:"oneToMany,mappedBy:x,index"`
+	}
+	if _, err := For[bad](NewRegistry()); err == nil || !strings.Contains(err.Error(), "only valid on the owning side") {
+		t.Fatalf("err = %v", err)
 	}
 }

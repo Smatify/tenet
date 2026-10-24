@@ -285,6 +285,7 @@ type Association struct {
 	Fetch         Fetch
 	OrphanRemoval bool
 	OrderBy       string
+	indexTag      Tag // the field options, for index and unique on the join column
 	Exported      bool
 	// Inherited is true for associations a subclass copied from its parent.
 	Inherited bool

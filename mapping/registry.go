@@ -561,6 +561,16 @@ func (r *Registry) parseField(e *Entity, sf reflect.StructField, index []int, ta
 		f.Version = true
 		e.Version = f
 	}
+	if err := e.fieldIndexes(tag, f.Column); err != nil {
+		return nil, errf("%s", err)
+	}
+	return f, nil
+}
+
+// fieldIndexes adds the unique and index options of a field (or the join
+// column of a to-one association) on column: alone without a value, else
+// to the named group in the order the columns are mapped.
+func (e *Entity) fieldIndexes(tag Tag, column string) error {
 	for _, kind := range []string{"unique", "index"} {
 		if !tag.Has(kind) {
 			continue
@@ -572,7 +582,7 @@ func (r *Registry) parseField(e *Entity, sf reflect.StructField, index []int, ta
 			if unique {
 				prefix = "uniq"
 			}
-			e.Indexes = append(e.Indexes, &IndexDef{Name: schema.IdentifierName(prefix, e.Table, []string{f.Column}), Columns: []string{f.Column}, Unique: unique})
+			e.Indexes = append(e.Indexes, &IndexDef{Name: schema.IdentifierName(prefix, e.Table, []string{column}), Columns: []string{column}, Unique: unique})
 			continue
 		}
 		var def *IndexDef
@@ -585,11 +595,11 @@ func (r *Registry) parseField(e *Entity, sf reflect.StructField, index []int, ta
 			def = &IndexDef{Name: group, Unique: unique}
 			e.Indexes = append(e.Indexes, def)
 		} else if def.Unique != unique {
-			return nil, errf("index %q is declared both unique and non-unique", group)
+			return fmt.Errorf("index %q is declared both unique and non-unique", group)
 		}
-		def.Columns = append(def.Columns, f.Column)
+		def.Columns = append(def.Columns, column)
 	}
-	return f, nil
+	return nil
 }
 
 func (r *Registry) parseAssoc(e *Entity, sf reflect.StructField, index []int, tag Tag, kind AssocKind) error {
@@ -693,6 +703,9 @@ func (r *Registry) parseAssoc(e *Entity, sf reflect.StructField, index []int, ta
 		if tag.Has("nullable") {
 			a.JoinColumns[0].Nullable = true
 		}
+		a.indexTag = tag // index and unique apply to the join column once it is named
+	} else if tag.Has("index") || tag.Has("unique") {
+		return errf("index and unique are only valid on the owning side of manyToOne and oneToOne")
 	}
 	if a.Owning && a.Kind == ManyToMany {
 		a.JoinTable = &JoinTable{Name: tag.Get("joinTable")}
@@ -740,6 +753,9 @@ func (r *Registry) resolve(e *Entity) error {
 				return errf("join column %q collides with field %s", jc.Name, existing.Name)
 			}
 			e.Fields = append(e.Fields, fk)
+			if err := e.fieldIndexes(a.indexTag, jc.Name); err != nil {
+				return errf("%s", err)
+			}
 			if a.Kind == OneToOne {
 				e.Indexes = append(e.Indexes, &IndexDef{Name: schema.IdentifierName("uniq", e.Table, []string{jc.Name}), Columns: []string{jc.Name}, Unique: true})
 			}
