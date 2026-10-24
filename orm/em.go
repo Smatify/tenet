@@ -28,6 +28,9 @@ type EntityManager struct {
 	batchSize int
 	filters   *Filters
 	cache     cache.Cache
+	// resolving is set while references are loaded: a reference points to
+	// a row that exists, so soft-deleted targets load too.
+	resolving bool
 }
 
 // Option configures an EntityManager.

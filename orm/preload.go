@@ -67,7 +67,7 @@ func (em *EntityManager) preloadAssoc(ctx context.Context, a *mapping.Associatio
 				}
 			}
 		}
-		return targets, em.initializeAll(ctx, a.Target, targets)
+		return targets, em.resolve(func() error { return em.initializeAll(ctx, a.Target, targets) })
 	}
 	return em.preloadMany(ctx, a, owners)
 }

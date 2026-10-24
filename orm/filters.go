@@ -97,7 +97,21 @@ func (em *EntityManager) Filters() *Filters { return em.filters }
 // filterConds returns the conditions of all enabled filters for meta, with
 // columns qualified by alias ("" for none).
 func (em *EntityManager) filterConds(meta *mapping.Entity, alias string) []dbal.Expr {
+	if em.resolving {
+		return em.filterCondsExcept(meta, alias, map[string]bool{SoftDeleteFilterName: true})
+	}
 	return em.filterCondsExcept(meta, alias, nil)
+}
+
+// resolve runs fn with soft-deleted rows visible, for loading references
+// (a to-one association to a soft-deleted entity still resolves).
+func (em *EntityManager) resolve(fn func() error) error {
+	if em.resolving {
+		return fn()
+	}
+	em.resolving = true
+	defer func() { em.resolving = false }()
+	return fn()
 }
 
 // filterCondsExcept is filterConds without the filters named in skip.

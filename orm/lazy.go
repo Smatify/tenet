@@ -72,7 +72,7 @@ func (em *EntityManager) initialize(ctx context.Context, e *entry) error {
 	}
 	idf := e.meta.SingleID()
 	if idf == nil || em.batchSize <= 1 {
-		return em.refresh(ctx, e)
+		return em.resolve(func() error { return em.refresh(ctx, e) })
 	}
 	batch := []*entry{e}
 	for _, other := range em.identity[e.meta.Root] {
@@ -90,9 +90,12 @@ func (em *EntityManager) initialize(ctx context.Context, e *entry) error {
 	for i, b := range batch {
 		ids[i] = idArg{f: idf, v: e.meta.Accessor().Get(b.ptr, idf.Pos)}
 	}
-	_, err := em.loadWhere(ctx, e.meta, func(q *dbal.SelectQuery) {
-		q.Where("? IN ?", dbal.Ident(idf.Column), dbal.In(ids))
-	}, 0)
+	err := em.resolve(func() error {
+		_, err := em.loadWhere(ctx, e.meta, func(q *dbal.SelectQuery) {
+			q.Where("? IN ?", dbal.Ident(idf.Column), dbal.In(ids))
+		}, 0)
+		return err
+	})
 	if err != nil {
 		return err
 	}
