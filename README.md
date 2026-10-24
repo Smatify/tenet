@@ -105,7 +105,7 @@ Time per operation (lower is better):
 | Insert 1000 rows² | 15.4 ms | 14.5 ms | 13.5 ms | 15.1 ms | 68.7 ms |
 | Find by ID | 59 µs | 60 µs | 158 µs | 57 µs | 54 µs |
 | Load 100 rows with their author | 451 µs | 382 µs | 297 µs | 300 µs | 185 µs |
-| Update one field of 100 loaded rows³ | 6.56 ms | 6.32 ms | 930 µs | 11.9 ms | 5.98 ms |
+| Update one field of 100 loaded rows³ | 831 µs | 6.32 ms | 930 µs | 11.9 ms | 5.98 ms |
 
 Allocations per operation:
 
@@ -116,12 +116,12 @@ Allocations per operation:
 | Insert 1000 rows² | 29,857 | 11,775 | 3,773 | 38,767 | 23,763 |
 | Find by ID | 101 | 73 | 47 | 94 | 25 |
 | Load 100 rows with their author | 3,139 | 2,467 | 644 | 1,802 | 534 |
-| Update one field of 100 loaded rows³ | 8,000 | 5,635 | 438 | 11,504 | 1,089 |
+| Update one field of 100 loaded rows³ | 5,881 | 5,635 | 438 | 11,504 | 1,089 |
 
 ¹ smorm and GORM write in a transaction (BEGIN, INSERT, COMMIT).
 ² Multi-row INSERT for all but sqlc, which inserts row by row in a transaction.
-³ bun sends one `UPDATE ... FROM (VALUES ...)`; the others one UPDATE per row in a
-transaction (smorm finds the changed column itself).
+³ smorm and bun send one `UPDATE ... FROM (VALUES ...)` (smorm finds the changed
+column itself); the others one UPDATE per row in a transaction.
 
 The name `smorm` is defined once in `internal/brand`; `scripts/rebrand.sh <name>`
 renames the whole project.

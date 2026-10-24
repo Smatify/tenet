@@ -285,17 +285,25 @@ func (em *EntityManager) Flush(ctx context.Context) error {
 				}
 			}
 		}
-		for _, u := range updates {
-			if err := em.update(ctx, db, u.e, u.fields); err != nil {
+		for i := 0; i < len(updates); {
+			n := updateBatchLen(updates[i:], db.Dialect())
+			if n > 1 {
+				if err := em.updateBatch(ctx, db, updates[i:i+n]); err != nil {
+					return err
+				}
+			} else if err := em.update(ctx, db, updates[i].e, updates[i].fields); err != nil {
 				return err
 			}
-			ev := EventPostUpdate
-			if u.soft {
-				ev = EventPostRemove
+			for _, u := range updates[i : i+n] {
+				ev := EventPostUpdate
+				if u.soft {
+					ev = EventPostRemove
+				}
+				if err := em.lifecycle(ctx, ev, u.e, u.cs); err != nil {
+					return err
+				}
 			}
-			if err := em.lifecycle(ctx, ev, u.e, u.cs); err != nil {
-				return err
-			}
+			i += n
 		}
 		for _, r := range joins {
 			target := em.entryOf(targetMeta(r), r.target)
@@ -585,6 +593,96 @@ func (em *EntityManager) updateTable(ctx context.Context, db dbal.IDB, e *entry,
 	if versioned && e.snapshot != nil {
 		if n, err := res.RowsAffected(); err == nil && n == 0 {
 			return &OptimisticLockError{Entity: e.meta.Name, ID: e.key, Version: old}
+		}
+	}
+	return nil
+}
+
+// updateBatchLen returns how many updates from the start of us can be
+// written with one statement: on Postgres, consecutive updates of the same
+// single-table, single-identifier entity without a version field that
+// change the same columns. It returns at least 1.
+func updateBatchLen(us []update, d dialect.Dialect) int {
+	if d.Name() != dialect.Postgres || len(us) < 2 {
+		return 1
+	}
+	first := us[0]
+	meta := first.e.meta
+	if len(meta.ID) != 1 || len(meta.Tables()) > 1 || meta.Version != nil {
+		return 1
+	}
+	n := 1
+	for n < len(us) && us[n].e.meta == meta && slices.Equal(us[n].fields, first.fields) {
+		n++
+	}
+	return n
+}
+
+// updateBatch writes updates of the same entity and columns with
+//
+//	UPDATE t SET c = v.c FROM (VALUES (...), ...) AS v(id, c) WHERE t.id = v.id
+//
+// The values are cast to the column types, which Postgres cannot infer
+// for parameters in VALUES.
+func (em *EntityManager) updateBatch(ctx context.Context, db dbal.IDB, us []update) error {
+	meta := us[0].e.meta
+	d := db.Dialect()
+	idf := meta.ID[0]
+	fields := append([]*mapping.Field{idf}, us[0].fields...)
+	casts := make([]string, len(fields))
+	for i, f := range fields {
+		casts[i] = "::" + f.Type.SQLDeclaration(d.Name(), f.Options)
+	}
+	var set, cols bytes.Buffer
+	for i, f := range fields {
+		if i > 0 {
+			cols.WriteString(", ")
+		}
+		cols.WriteString(d.QuoteIdent(f.Column))
+		if i == 0 {
+			continue
+		}
+		if i > 1 {
+			set.WriteString(", ")
+		}
+		set.WriteString(d.QuoteIdent(f.Column) + " = v." + d.QuoteIdent(f.Column))
+	}
+	head := "UPDATE " + d.QuoteIdent(meta.Table) + " AS t SET " + set.String() + " FROM (VALUES "
+	tail := ") AS v(" + cols.String() + ") WHERE t." + d.QuoteIdent(idf.Column) + " = v." + d.QuoteIdent(idf.Column)
+	rows := max(1, min(maxBatchRows, maxBindParams/len(fields)))
+	for start := 0; start < len(us); start += rows {
+		chunk := us[start:min(start+rows, len(us))]
+		var b bytes.Buffer
+		b.WriteString(head)
+		args := make([]any, 0, len(chunk)*len(fields))
+		for r, u := range chunk {
+			if r > 0 {
+				b.WriteString(", ")
+			}
+			b.WriteByte('(')
+			for i, f := range fields {
+				var v any
+				var err error
+				if i == 0 {
+					v, err = idf.Type.ToDatabase(convertTo(idValues(meta, u.e.ptr)[0], idf.GoType), d.Name())
+				} else {
+					v, err = em.fieldDBValue(u.e, f)
+				}
+				if err != nil {
+					return err
+				}
+				args = append(args, v)
+				if i > 0 {
+					b.WriteString(", ")
+				}
+				b.WriteString(d.Placeholder(len(args)))
+				b.WriteString(casts[i])
+			}
+			b.WriteByte(')')
+		}
+		b.WriteString(tail)
+		if _, err := db.ExecContext(ctx, b.String(), args...); err != nil {
+			return wrapErr(meta, "update", err)
 		}
 	}
 	return nil
