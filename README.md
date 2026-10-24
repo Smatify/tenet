@@ -92,18 +92,31 @@ posts does not query the author of each post separately.
 
 ## Benchmarks
 
-`make bench` runs [bench](bench) against Postgres 17 in a container. Microseconds
-per operation (allocations), all libraries on `database/sql` with pgx, Go 1.27,
-AMD Ryzen 9 7950X3D, GORM 1.31, bun 1.3, ent 0.14, sqlc 1.31:
+`make bench` runs [bench](bench) against Postgres 17 in a container: all libraries on
+`database/sql` with pgx, Go 1.27, AMD Ryzen 9 7950X3D, GORM 1.31, bun 1.3, ent 0.14,
+sqlc 1.31.
+
+Time per operation (lower is better):
 
 | | smorm | GORM | bun | ent | sqlc |
 |---|---:|---:|---:|---:|---:|
-| Insert 1 row¹ | 161 (106) | 158 (86) | 84 (21) | 82 (70) | 76 (18) |
-| Insert 100 rows² | 1,734 (2,948) | 1,541 (1,103) | 1,460 (321) | 1,572 (3,779) | 7,108 (2,312) |
-| Insert 1000 rows² | 15,439 (29,857) | 14,499 (11,775) | 13,543 (3,773) | 15,083 (38,767) | 68,728 (23,763) |
-| Find by ID | 59 (101) | 60 (73) | 158 (47) | 57 (94) | 54 (25) |
-| Load 100 rows with their author | 451 (3,139) | 382 (2,467) | 297 (644) | 300 (1,802) | 185 (534) |
-| Update one field of 100 loaded rows³ | 6,556 (8,000) | 6,319 (5,635) | 930 (438) | 11,924 (11,504) | 5,981 (1,089) |
+| Insert 1 row¹ | 161 µs | 158 µs | 84 µs | 82 µs | 76 µs |
+| Insert 100 rows² | 1.73 ms | 1.54 ms | 1.46 ms | 1.57 ms | 7.11 ms |
+| Insert 1000 rows² | 15.4 ms | 14.5 ms | 13.5 ms | 15.1 ms | 68.7 ms |
+| Find by ID | 59 µs | 60 µs | 158 µs | 57 µs | 54 µs |
+| Load 100 rows with their author | 451 µs | 382 µs | 297 µs | 300 µs | 185 µs |
+| Update one field of 100 loaded rows³ | 6.56 ms | 6.32 ms | 930 µs | 11.9 ms | 5.98 ms |
+
+Allocations per operation:
+
+| | smorm | GORM | bun | ent | sqlc |
+|---|---:|---:|---:|---:|---:|
+| Insert 1 row¹ | 106 | 86 | 21 | 70 | 18 |
+| Insert 100 rows² | 2,948 | 1,103 | 321 | 3,779 | 2,312 |
+| Insert 1000 rows² | 29,857 | 11,775 | 3,773 | 38,767 | 23,763 |
+| Find by ID | 101 | 73 | 47 | 94 | 25 |
+| Load 100 rows with their author | 3,139 | 2,467 | 644 | 1,802 | 534 |
+| Update one field of 100 loaded rows³ | 8,000 | 5,635 | 438 | 11,504 | 1,089 |
 
 ¹ smorm and GORM write in a transaction (BEGIN, INSERT, COMMIT).
 ² Multi-row INSERT for all but sqlc, which inserts row by row in a transaction.
