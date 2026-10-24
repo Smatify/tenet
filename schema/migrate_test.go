@@ -176,14 +176,68 @@ func TestMigrateSQLite(t *testing.T) {
 			t.Errorf("expected rebuild for %+v", to.Table("u"))
 		}
 	}
-	// A rebuild of a table without surviving columns has no INSERT.
+	// A rebuild of a table without surviving columns has no INSERT, new NOT
+	// NULL columns get the zero value.
 	empty := New()
 	empty.CreateTable("u").AddColumn("old", types.Integer)
 	other := New()
-	other.CreateTable("u").AddColumn("new", types.Integer)
+	other.CreateTable("u").AddColumn("new", types.Integer).SetNullable(true)
 	got := migrateFor(t, dialect.SQLite, empty, other)
 	if slices.ContainsFunc(got, func(s string) bool { return strings.HasPrefix(s, "INSERT") }) {
 		t.Fatalf("unexpected insert: %v", got)
+	}
+	other.Table("u").AddColumn("count", types.Integer)
+	other.Table("u").AddColumn("at", types.DateTime)
+	got = migrateFor(t, dialect.SQLite, empty, other)
+	if !slices.Contains(got, `INSERT INTO "__tmp__u" ("count") SELECT 0 FROM "u"`) {
+		t.Fatalf("zero fill: %v", got)
+	}
+}
+
+func TestMigrateAddNotNullColumn(t *testing.T) {
+	from := simpleUsers()
+	to := simpleUsers()
+	u := to.Table("u")
+	u.AddColumn("active", types.Boolean)
+	u.AddColumn("score", types.Integer)
+	u.AddColumn("nick", types.String).SetLength(20)
+	u.AddColumn("born", types.Date)
+	u.AddColumn("level", types.Integer).Default = new("1")
+	fill := " -- zero value for existing rows; replace it if needed"
+	for d, want := range map[dialect.Name][]string{
+		dialect.Postgres: {
+			`ALTER TABLE "u" ADD COLUMN "active" BOOLEAN NULL`,
+			`UPDATE "u" SET "active" = FALSE` + fill,
+			`ALTER TABLE "u" ALTER COLUMN "active" SET NOT NULL`,
+			`ALTER TABLE "u" ADD COLUMN "score" INTEGER NULL`,
+			`UPDATE "u" SET "score" = 0` + fill,
+			`ALTER TABLE "u" ALTER COLUMN "score" SET NOT NULL`,
+			`UPDATE "u" SET "nick" = ''` + fill,
+			`ALTER TABLE "u" ADD COLUMN "born" DATE NOT NULL`,
+			`ALTER TABLE "u" ADD COLUMN "level" INTEGER NOT NULL DEFAULT 1`,
+		},
+		dialect.MySQL: {
+			"UPDATE `u` SET `active` = FALSE" + fill,
+			"ALTER TABLE `u` MODIFY `active` TINYINT(1) NOT NULL",
+		},
+		dialect.MSSQL: {
+			`ALTER TABLE [u] ADD [active] BIT NULL`,
+			`UPDATE [u] SET [active] = 0` + fill,
+			`ALTER TABLE [u] ALTER COLUMN [active] BIT NOT NULL`,
+		},
+	} {
+		got := migrateFor(t, d, from, to)
+		for _, w := range want {
+			if !slices.Contains(got, w) {
+				t.Errorf("%s: missing %s in\n%s", d, w, strings.Join(got, "\n"))
+			}
+		}
+	}
+	// Foreign key columns are added as declared (no sensible zero value).
+	to.Table("u").AddColumn("parent_id", types.Integer)
+	to.Table("u").AddForeignKey([]string{"parent_id"}, "u", []string{"id"})
+	if got := migrateFor(t, dialect.Postgres, from, to); !slices.Contains(got, `ALTER TABLE "u" ADD COLUMN "parent_id" INTEGER NOT NULL`) {
+		t.Fatalf("foreign key column: %v", got)
 	}
 }
 

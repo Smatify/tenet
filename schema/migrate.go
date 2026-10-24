@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/smatify/smorm/dialect"
+	"github.com/smatify/smorm/types"
 )
 
 // SQLiteRebuildPrefix prefixes the temporary table used when SQLite has to
@@ -135,7 +136,15 @@ func (g *DDL) alterTable(td *TableDiff) ([]string, error) {
 		}
 	}
 	for _, c := range td.AddColumns {
-		decl, err := g.ColumnDeclaration(t, c)
+		zero, fill := g.fillValue(t, c)
+		add := c
+		if fill {
+			// Existing rows need a value: add nullable, fill, then NOT NULL.
+			nullable := *c
+			nullable.Nullable = true
+			add = &nullable
+		}
+		decl, err := g.ColumnDeclaration(t, add)
 		if err != nil {
 			return nil, err
 		}
@@ -143,6 +152,14 @@ func (g *DDL) alterTable(td *TableDiff) ([]string, error) {
 			out = append(out, alter+"ADD "+decl)
 		} else {
 			out = append(out, alter+"ADD COLUMN "+decl)
+		}
+		if fill {
+			out = append(out, "UPDATE "+g.q(t.Name)+" SET "+g.q(c.Name)+" = "+zero+" -- zero value for existing rows; replace it if needed")
+			stmts, err := g.changeColumn(&TableDiff{From: t, To: t}, &ColumnChange{From: add, To: c, Nullable: true})
+			if err != nil {
+				return nil, err
+			}
+			out = append(out, stmts...)
 		}
 		if g.name() == dialect.Postgres && c.Comment != "" {
 			after = append(after, g.columnComment(t.Name, c))
@@ -175,6 +192,33 @@ func (g *DDL) alterTable(td *TableDiff) ([]string, error) {
 		out = append(out, g.tableComment(t))
 	}
 	return append(out, after...), nil
+}
+
+// fillValue returns the Go zero value as SQL for a NOT NULL column without
+// default that is added to an existing table. Columns of foreign keys and
+// types without a sensible zero value (dates, UUIDs, JSON, binary) report
+// false and are added as declared.
+func (g *DDL) fillValue(t *Table, c *Column) (string, bool) {
+	if c.Nullable || c.Default != nil || c.AutoIncrement || c.RawType != "" {
+		return "", false
+	}
+	for _, fk := range t.ForeignKeys {
+		if slices.ContainsFunc(fk.Columns, func(n string) bool { return strings.EqualFold(n, c.Name) }) {
+			return "", false
+		}
+	}
+	switch c.Type {
+	case types.Boolean:
+		if g.name() == dialect.MSSQL || g.name() == dialect.SQLite {
+			return "0", true
+		}
+		return "FALSE", true
+	case types.SmallInt, types.Integer, types.BigInt, types.Decimal, types.Float:
+		return "0", true
+	case types.String, types.Text:
+		return "''", true
+	}
+	return "", false
 }
 
 func (g *DDL) defaultName(table string, c *Column) string {
@@ -284,16 +328,19 @@ func (g *DDL) sqliteRebuild(td *TableDiff) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	var cols []string
+	var cols, values []string
 	for _, c := range t.Columns {
 		if td.From.Column(c.Name) != nil {
 			cols = append(cols, c.Name)
+			values = append(values, g.q(c.Name))
+		} else if zero, ok := g.fillValue(t, c); ok {
+			cols = append(cols, c.Name)
+			values = append(values, zero)
 		}
 	}
 	out := []string{create}
 	if len(cols) > 0 {
-		list := g.qList(cols)
-		out = append(out, "INSERT INTO "+g.q(tmp)+" ("+list+") SELECT "+list+" FROM "+g.q(td.From.Name))
+		out = append(out, "INSERT INTO "+g.q(tmp)+" ("+g.qList(cols)+") SELECT "+strings.Join(values, ", ")+" FROM "+g.q(td.From.Name))
 	}
 	out = append(out,
 		"DROP TABLE "+g.q(td.From.Name),

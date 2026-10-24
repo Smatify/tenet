@@ -56,6 +56,8 @@ func migrateV2(d dialect.Dialect, p string) *schema.Schema {
 	u.DropColumn("legacy")                    // drop
 	u.AddColumn("bio", types.Text).SetNullable(true)
 	u.AddColumn("score", types.Integer).SetDefault("0") // NOT NULL with default
+	u.AddColumn("active", types.Boolean)                // NOT NULL without default:
+	u.AddColumn("handle", types.String).SetLength(20)   // filled with the zero value
 	u.Indexes = nil
 	u.AddUniqueIndex("email").SetName("uniq_email_v2")
 	u.AddIndex("status")
@@ -145,6 +147,11 @@ func testSchemaMigrate(t *testing.T, db *dbal.DB) {
 	var score int
 	if err := db.NewSelect().Column("score").Table(p+"users").Where("id = ?", uid).Scan(ctx, &score); err != nil || score != 0 {
 		t.Fatalf("score default = %d, %v", score, err)
+	}
+	var active bool
+	var handle string
+	if err := db.NewSelect().Column("active", "handle").Table(p+"users").Where("id = ?", uid).Scan(ctx, &active, &handle); err != nil || active || handle != "" {
+		t.Fatalf("zero filled = %v %q, %v", active, handle, err)
 	}
 	// ON DELETE CASCADE is active after the migration.
 	if _, err := db.NewDelete().Table(p+"users").Where("id = ?", uid).Exec(ctx); err != nil {
