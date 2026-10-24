@@ -2,13 +2,47 @@ package dbtest
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"testing"
 
 	"github.com/smatify/smorm/dbal"
+	"github.com/smatify/smorm/dialect"
 )
 
-func init() { Register(Case{"ORM/BatchInsert", testORMBatch}) }
+func init() {
+	Register(Case{"ORM/BatchInsert", testORMBatch}, Case{"ORM/BatchInsertIdentity", testORMBatchIdentity})
+}
+
+// Entities with identity identifiers are inserted with one statement on
+// Postgres, which returns the identifiers in the order of the rows.
+func testORMBatchIdentity(t *testing.T, db *dbal.DB) {
+	ctx := context.Background()
+	newEM := setupORM(t, db)
+	em := newEM()
+	cats := make([]*ormCategory, 600) // more than one chunk
+	for i := range cats {
+		cats[i] = &ormCategory{Name: fmt.Sprint("c", i)}
+		must(t, em.Persist(cats[i]))
+	}
+	statements := 0
+	db.AddQueryHook(dbal.QueryHookFuncs{After: func(_ context.Context, ev *dbal.QueryEvent) {
+		if ev.Operation == "INSERT" && strings.Contains(ev.Query, "orm_category") {
+			statements++
+		}
+	}})
+	must(t, em.Flush(ctx))
+	if want := map[bool]int{true: 2, false: 600}[db.Dialect().Name() == dialect.Postgres]; statements != want {
+		t.Fatalf("statements = %d, want %d", statements, want)
+	}
+	for i, c := range cats {
+		var name string
+		must(t, db.NewSelect().Column("name").Table("orm_category").Where("id = ?", c.ID).Scan(ctx, &name))
+		if name != fmt.Sprint("c", i) || (i > 0 && c.ID <= cats[i-1].ID) {
+			t.Fatalf("row %d: id %d has name %q", i, c.ID, name)
+		}
+	}
+}
 
 func testORMBatch(t *testing.T, db *dbal.DB) {
 	ctx := context.Background()
