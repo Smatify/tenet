@@ -136,7 +136,15 @@ func (em *EntityManager) newHydrator(meta *mapping.Entity) *hydrator {
 	return &hydrator{em: em, meta: meta}
 }
 
+// prepare sets up the scan destinations once per hydrator; later rows reuse
+// them after zeroing (values are copied out in process).
 func (h *hydrator) prepare() {
+	if h.slots != nil {
+		for _, s := range h.slots {
+			s.holder.Elem().SetZero()
+		}
+		return
+	}
 	d := h.em.db.Dialect().Name()
 	h.slots = make([]slot, len(h.meta.Fields))
 	h.dests = make([]any, len(h.meta.Fields))
