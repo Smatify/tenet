@@ -14,7 +14,7 @@ import (
 )
 
 func makeEntity() console.Command {
-	var style *string
+	var style, desc *string
 	var uuidID, timestamps *bool
 	return console.Command{
 		Name:        "make:entity",
@@ -24,6 +24,7 @@ func makeEntity() console.Command {
 			style = fs.String("style", string(StyleDoctrine), "doctrine (getters/setters, lazy loading) or go (exported fields)")
 			uuidID = fs.Bool("uuid", false, "use a UUIDv7 identifier for new entities")
 			timestamps = fs.Bool("timestamps", false, "add created_at/updated_at to new entities")
+			desc = fs.String("description", "", `doc comment of a new entity after its name (e.g. "is a team of players")`)
 		},
 		Run: func(_ context.Context, c *console.Ctx) error {
 			dir := c.App.Config.EntityDir
@@ -43,11 +44,14 @@ func makeEntity() console.Command {
 				return errors.New("an entity name is required")
 			}
 			name = upper(name)
-			spec := EntitySpec{Name: name, UUID: *uuidID, Timestamps: *timestamps}
+			spec := EntitySpec{Name: name, UUID: *uuidID, Timestamps: *timestamps, Description: *desc}
 			path := (&writer{mk: mk}).path(name)
 			if _, err := os.Stat(path); err == nil {
 				c.Printf("\n Your entity already exists! So let's add some new fields!\n")
 			} else {
+				if *desc == "" && c.Interactive {
+					spec.Description = c.Ask("Describe it for the doc comment: "+name+" ...", "is an entity")
+				}
 				if !*timestamps && c.Interactive {
 					spec.Timestamps = c.Confirm("Add created_at/updated_at timestamps?", false)
 				}
@@ -148,25 +152,51 @@ func askRelation(c *console.Ctx, entity string, f *FieldSpec) {
 	switch f.Relation {
 	case ManyToOne, OneToOne:
 		f.Nullable = c.Confirm(fmt.Sprintf("Is the %s.%s property allowed to be null (nullable)?", entity, f.Name), true)
+		askOnDelete(c, f, entity, f.Target)
 		if c.Confirm(fmt.Sprintf("Do you want to add a new property to %s so that you can access/update %s objects from it?", f.Target, entity), true) {
 			def := lower(entity)
 			if f.Relation == ManyToOne {
 				def = plural(lower(entity))
 			}
 			f.Inverse = c.Ask(fmt.Sprintf("New field name inside %s", f.Target), def)
-			if f.Relation == ManyToOne && !f.Nullable {
-				f.OrphanRemoval = c.Confirm(fmt.Sprintf("Do you want to activate orphanRemoval on %s.%s?", f.Target, f.Inverse), false)
+			if f.Relation == ManyToOne {
+				askOwned(c, f, f.Target, f.Inverse)
 			}
 		}
 	case OneToMany:
 		f.Inverse = c.Ask(fmt.Sprintf("A new property will also be added to %s so that you can access the related %s object from it. New field name inside %s", f.Target, entity, f.Target), lower(entity))
 		f.Nullable = c.Confirm(fmt.Sprintf("Is the %s.%s property allowed to be null (nullable)?", f.Target, f.Inverse), true)
-		if !f.Nullable {
-			f.OrphanRemoval = c.Confirm(fmt.Sprintf("Do you want to activate orphanRemoval on %s.%s?", entity, f.Name), false)
-		}
+		askOnDelete(c, f, f.Target, entity)
+		askOwned(c, f, entity, f.Name)
 	case ManyToMany:
 		if c.Confirm(fmt.Sprintf("Do you want to add a new property to %s so that you can access/update %s objects from it?", f.Target, entity), true) {
 			f.Inverse = c.Ask(fmt.Sprintf("New field name inside %s", f.Target), plural(lower(entity)))
 		}
+		f.JoinTable = c.Ask("Join table name (empty: default)", "")
+	}
+}
+
+// askOnDelete asks what the database does with a child when its parent row
+// is deleted.
+func askOnDelete(c *console.Ctx, f *FieldSpec, child, parent string) {
+	options := []string{"none", "cascade", "restrict"}
+	if f.Nullable {
+		options = append(options, "set_null")
+	}
+	if v := c.Choice(fmt.Sprintf("When a %s is deleted, what happens to its %s rows (onDelete)?", parent, child), options, "none"); v != "none" {
+		f.OnDelete = v
+	}
+}
+
+// askOwned asks whether the collection owns its items: they are persisted
+// and removed with the owner, and deleted when taken out of the collection.
+func askOwned(c *console.Ctx, f *FieldSpec, owner, prop string) {
+	if c.Confirm(fmt.Sprintf("Does %s own the %s (persist and remove them with it)?", owner, prop), false) {
+		f.Cascade = []string{"persist", "remove"}
+		if !f.Nullable {
+			f.OrphanRemoval = c.Confirm(fmt.Sprintf("Do you want to activate orphanRemoval on %s.%s?", owner, prop), true)
+		}
+	} else if !f.Nullable {
+		f.OrphanRemoval = c.Confirm(fmt.Sprintf("Do you want to activate orphanRemoval on %s.%s?", owner, prop), false)
 	}
 }

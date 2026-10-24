@@ -48,7 +48,13 @@ type FieldSpec struct {
 	Relation      string // relation kind when Type == "relation"
 	Target        string // target entity name
 	Inverse       string // property on the target ("" = unidirectional)
-	OrphanRemoval bool
+	OrphanRemoval bool   // of the one-to-many side (or the inverse one-to-one)
+	// Cascade lists operations (persist, remove, refresh, detach, all)
+	// cascaded from the one-to-many side of manyToOne/oneToMany relations,
+	// and from the field itself for manyToMany and oneToOne.
+	Cascade   []string
+	OnDelete  string // database action of a manyToOne/oneToOne join column: cascade, set_null, restrict
+	JoinTable string // join table name of a manyToMany ("" = <owner>_<target>)
 
 	Embeddable string // struct name when Type == "embedded"
 	Prefix     string // column prefix ("" = default, "-" = none)
@@ -61,7 +67,10 @@ type EntitySpec struct {
 	Style      Style
 	UUID       bool // UUIDv7 identifier instead of auto increment
 	Timestamps bool
-	Fields     []FieldSpec
+	// Description continues the doc comment of a new entity after its
+	// name, e.g. "is a team of players" (default "is an entity").
+	Description string
+	Fields      []FieldSpec
 }
 
 // Maker writes entity files into Dir.
@@ -133,6 +142,9 @@ type writer struct {
 	files   map[string]*astedit.File
 	created []string
 	paths   map[string]string // entity → file declaring it
+	// existing holds "Entity.Method" of methods to keep (Accessors).
+	existing map[string]bool
+	added    []string
 }
 
 // path returns the file declaring entity: the file in Dir that declares it
@@ -202,7 +214,11 @@ func (w *writer) ensureEntity(name string, spec EntitySpec) (bool, error) {
 	path = filepath.Join(w.mk.Dir, table+".go")
 	w.remember(name, path)
 	var b strings.Builder
-	fmt.Fprintf(&b, "package %s\n\nimport %q\n\n// %s is an entity.\ntype %s struct {\n", pkg, importPath(), name, name)
+	desc := strings.TrimSuffix(strings.TrimSpace(spec.Description), ".")
+	if desc == "" {
+		desc = "is an entity"
+	}
+	fmt.Fprintf(&b, "package %s\n\nimport %q\n\n// %s %s.\ntype %s struct {\n", pkg, importPath(), name, desc, name)
 	fmt.Fprintf(&b, "\t%s.Entity `%s:\"table:%s\"`\n", root, brand.TagKey, table)
 	switch {
 	case w.style == StyleGo && spec.UUID:

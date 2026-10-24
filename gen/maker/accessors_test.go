@@ -1,0 +1,66 @@
+package maker
+
+import (
+	"os"
+	"path/filepath"
+	"slices"
+	"strings"
+	"testing"
+
+	"github.com/smatify/smorm/gen"
+)
+
+func TestAccessorsForHandWrittenFields(t *testing.T) {
+	dir := tempModule(t)
+	entDir := filepath.Join(dir, "entity")
+	if err := os.MkdirAll(entDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	src := strings.ReplaceAll(`package entity
+
+import "github.com/smatify/smorm"
+
+type Team struct {
+	smorm.Entity
+	smorm.UUIDID
+	title   string                    `+"`smorm:\"length:50\"`"+`
+	players smorm.Collection[Player]  `+"`smorm:\"oneToMany,mappedBy:team\"`"+`
+	cache   string                    `+"`smorm:\"-\"`"+`
+}
+
+// Title is written by hand and kept.
+func (t *Team) Title() string { smorm.Touch(t); return "team " + t.title }
+
+type Player struct {
+	smorm.Entity
+	smorm.UUIDID
+	team *Team `+"`smorm:\"manyToOne,inversedBy:players\"`"+`
+}
+`, "smorm", "smorm")
+	if err := os.WriteFile(filepath.Join(entDir, "team.go"), []byte(src), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	added, err := (&Maker{Dir: entDir}).Accessors()
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []string{"Team.SetTitle", "Team.Players", "Team.AddPlayer", "Team.RemovePlayer", "Team.SetPlayers", "Player.Team", "Player.SetTeam"}
+	slices.Sort(added)
+	slices.Sort(want)
+	if !slices.Equal(added, want) {
+		t.Fatalf("added = %v", added)
+	}
+	if _, err := gen.Generate(entDir); err != nil {
+		t.Fatal(err)
+	}
+	goCmd(t, dir, "vet", "./...")
+	out, _ := os.ReadFile(filepath.Join(entDir, "team.go"))
+	for _, s := range []string{`return "team " + t.title`, "item.SetTeam(t)", "if item.Team() == t {"} {
+		if !strings.Contains(string(out), s) {
+			t.Errorf("team.go misses %q:\n%s", s, out)
+		}
+	}
+	if again, err := (&Maker{Dir: entDir}).Accessors(); err != nil || len(again) != 0 {
+		t.Fatalf("second run = %v, %v", again, err)
+	}
+}

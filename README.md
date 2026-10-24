@@ -52,7 +52,8 @@ See [examples/blog](examples/blog) for a complete project generated this way.
   database number new rows (a public number next to a UUID; unique, read back on
   insert, not on SQLite; a table has at most one identity column).
 - **Doctrine style** (default of `make:entity`): unexported fields with generated
-  getters that call `smorm.Touch` for lazy loading. **Go style**: exported fields and `smorm.Ref[T]`.
+  getters that call `smorm.Touch` for lazy loading (`smorm generate --accessors` writes the
+  missing ones for fields added by hand). **Go style**: exported fields and `smorm.Ref[T]`.
 - **Unit of work**: `Persist`, `Remove`, `Flush`, `Refresh`, `Detach`, `Clear`,
   `Transactional`; only changed columns are written; lifecycle hooks and an event manager.
 - **Associations**: manyToOne, oneToMany, oneToOne, manyToMany with `smorm.Collection[T]`

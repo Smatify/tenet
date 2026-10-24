@@ -27,7 +27,7 @@ func TestRun(t *testing.T) {
 	if code := run([]string{"generate", "../../internal/fixture/blog"}, &out, &errOut); code != 0 || !strings.Contains(out.String(), "generated:") {
 		t.Fatalf("generate: %s", errOut.String())
 	}
-	if run([]string{"generate", "does-not-exist"}, &out, &errOut) != 1 {
+	if run([]string{"generate", "does-not-exist"}, &out, &errOut) != 1 || run([]string{"generate", "--accessors", "does-not-exist"}, &out, &errOut) != 1 {
 		t.Fatal("generate error")
 	}
 }

@@ -25,14 +25,15 @@ func TestMakeEntityWizard(t *testing.T) {
 	dir := tempModule(t)
 	entDir := filepath.Join(dir, "entity")
 	input := strings.Join([]string{
+		"is a blog post",               // description
 		"yes",                          // timestamps
 		"title", "", "200", "no", "no", // string(200)
 		"publishedAt", "", "yes", "no", // datetime guessed, nullable
 		"isActive", "", "no", "no", // boolean guessed
 		"price", "decimal", "8", "2", "no", "no",
 		"1x", "string", "", "no", "no", // invalid name: error, loop continues
-		"author", "relation", "Author", "", "no", "", "", "no", // manyToOne, not null, inverse posts, no orphanRemoval
-		"tags", "relation", "Tag", "2", "", "", // manyToMany with inverse
+		"author", "relation", "Author", "", "no", "cascade", "", "", "yes", "", // manyToOne, not null, onDelete, inverse posts owned by Author
+		"tags", "relation", "Tag", "2", "", "", "post_tag", // manyToMany with inverse and join table
 		"",
 	}, "\n") + "\n"
 	out, code := runMaker(t, entDir, input, "Post")
@@ -47,10 +48,15 @@ func TestMakeEntityWizard(t *testing.T) {
 	goCmd(t, dir, "vet", "./...")
 	post, _ := os.ReadFile(filepath.Join(entDir, "post.go"))
 	for _, want := range []string{"Timestamps", "title string", `length:200`, "publishedAt *time.Time", "isActive bool",
-		"type:decimal,precision:8,scale:2", "author *Author", "manyToOne,inversedBy:posts,notnull", "tags " + root + ".Collection[Tag]"} {
+		"type:decimal,precision:8,scale:2", "author *Author", "manyToOne,inversedBy:posts,notnull,onDelete:cascade", "tags " + root + ".Collection[Tag]",
+		"manyToMany,inversedBy:posts,joinTable:post_tag", "// Post is a blog post."} {
 		if !strings.Contains(norm(string(post)), norm(want)) {
 			t.Errorf("post.go misses %q:\n%s", want, post)
 		}
+	}
+	author, _ := os.ReadFile(filepath.Join(entDir, "author.go"))
+	if !strings.Contains(string(author), "oneToMany,mappedBy:author,cascade:persist|remove,orphanRemoval") {
+		t.Errorf("author.go:\n%s", author)
 	}
 	if _, err := os.Stat(filepath.Join(entDir, "entities_smorm.go")); err != nil {
 		t.Fatal("generated code missing")
@@ -94,7 +100,7 @@ func TestMakeEntityErrors(t *testing.T) {
 func TestMakeEntityReceiverV(t *testing.T) {
 	dir := tempModule(t)
 	entDir := filepath.Join(dir, "entity")
-	out, code := runMaker(t, entDir, "no\ntitle\n\n100\nno\nno\n\n", "Vote")
+	out, code := runMaker(t, entDir, "\nno\ntitle\n\n100\nno\nno\n\n", "Vote")
 	if code != 0 {
 		t.Fatalf("code %d\n%s", code, out)
 	}

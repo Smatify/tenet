@@ -121,9 +121,10 @@ func TestWorkflow(t *testing.T) {
 
 	// Post with a title and a manyToOne author (inverse: Author.posts).
 	p.console(strings.Join([]string{
+		"",                             // description
 		"no",                           // timestamps
 		"title", "", "200", "no", "no", // string(200)
-		"author", "relation", "Author", "", "no", "", "", "no",
+		"author", "relation", "Author", "", "no", "", "", "", "", "no",
 		"",
 	}, "\n")+"\n", "make:entity", "Post")
 	p.console("name\n\n100\nno\nyes\n\n", "make:entity", "Author")

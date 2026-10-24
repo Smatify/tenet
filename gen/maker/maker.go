@@ -31,10 +31,14 @@ func makeMigration() console.Command {
 }
 
 func generateCmd() console.Command {
+	var accessors *bool
 	return console.Command{
 		Name:        "make:generate",
 		Usage:       "[dir...]",
 		Description: "Regenerate entity accessors and field references",
+		Flags: func(fs *flag.FlagSet) {
+			accessors = fs.Bool("accessors", false, "also write missing getters/setters of mapped fields added by hand")
+		},
 		Run: func(_ context.Context, c *console.Ctx) error {
 			dirs := c.Args
 			if len(dirs) == 0 {
@@ -43,6 +47,15 @@ func generateCmd() console.Command {
 			for _, d := range dirs {
 				if d == "" {
 					return fmt.Errorf("no entity directory configured")
+				}
+				if *accessors {
+					added, err := (&Maker{Dir: d}).Accessors()
+					if err != nil {
+						return err
+					}
+					for _, m := range added {
+						c.Printf(" added: %s\n", m)
+					}
 				}
 				out, err := gen.Generate(d)
 				if err != nil {

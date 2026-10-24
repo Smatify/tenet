@@ -239,3 +239,48 @@ func TestFilesNamedAfterTables(t *testing.T) {
 		}
 	}
 }
+
+func TestApplyRelationOptions(t *testing.T) {
+	dir := tempModule(t)
+	entDir := filepath.Join(dir, "entity")
+	mk := &Maker{Dir: entDir}
+	_, err := mk.Apply(EntitySpec{Name: "Team", Description: "is a group of players.", Fields: []FieldSpec{
+		{Name: "players", Type: "relation", Relation: OneToMany, Target: "Player", Inverse: "team",
+			Cascade: []string{"persist", "remove"}, OrphanRemoval: true, OnDelete: "cascade"},
+		{Name: "labels", Type: "relation", Relation: ManyToMany, Target: "Label", JoinTable: "team_label"},
+		{Name: "captain", Type: "relation", Relation: ManyToOne, Target: "Player", Nullable: true, OnDelete: "set_null"},
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := gen.Generate(entDir); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(dir, "check"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	prog := strings.ReplaceAll(checkProgram, "%[1]s", importPath())
+	if err := os.WriteFile(filepath.Join(dir, "check", "main.go"), []byte(prog), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	goCmd(t, dir, "vet", "./...")
+	goCmd(t, dir, "run", "./check")
+	team, _ := os.ReadFile(filepath.Join(entDir, "team.go"))
+	player, _ := os.ReadFile(filepath.Join(entDir, "player.go"))
+	for src, wants := range map[string][]string{string(team): {
+		"// Team is a group of players.",
+		`smorm:"oneToMany,mappedBy:team,cascade:persist|remove,orphanRemoval"`,
+		`smorm:"manyToMany,joinTable:team_label"`,
+		`smorm:"manyToOne,onDelete:set_null"`,
+		"func (t *Team) SetPlayers(items []*Player) *Team",
+		"func (t *Team) SetLabels(items []*Label) *Team",
+	}, string(player): {
+		`smorm:"manyToOne,inversedBy:players,notnull,onDelete:cascade"`,
+	}} {
+		for _, want := range wants {
+			if !strings.Contains(src, want) {
+				t.Errorf("missing %q in\n%s", want, src)
+			}
+		}
+	}
+}

@@ -100,23 +100,48 @@ func (w *writer) addField(entity string, f FieldSpec) error {
 	return w.accessors(entity, f.Name, typ)
 }
 
+// method is a declaration to add, named for skipping existing methods.
+type method struct{ name, src, imp string }
+
+// addMethods adds methods to entity, except those that exist already when
+// the writer completes hand-written entities.
+func (w *writer) addMethods(entity string, methods ...method) error {
+	var src strings.Builder
+	f := w.file(entity)
+	for _, m := range methods {
+		if w.existing[entity+"."+m.name] {
+			continue
+		}
+		if m.imp != "" {
+			f.AddImport(m.imp, "")
+		}
+		src.WriteString(m.src + "\n")
+		w.added = append(w.added, entity+"."+m.name)
+	}
+	if src.Len() == 0 {
+		return nil
+	}
+	return f.AddDecls(src.String())
+}
+
 // accessors adds a Doctrine style getter and fluent setter.
 func (w *writer) accessors(entity, prop, typ string) error {
 	r, field, up := recv(entity), lower(prop), upper(prop)
-	src := fmt.Sprintf(`// %[3]s returns the %[2]s.
+	args := []any{r, field, up, entity, typ, root, param(r)}
+	return w.addMethods(entity,
+		method{name: up, src: fmt.Sprintf(`// %[3]s returns the %[2]s.
 func (%[1]s *%[4]s) %[3]s() %[5]s {
 	%[6]s.Touch(%[1]s)
 	return %[1]s.%[2]s
 }
-
-// Set%[3]s sets the %[2]s.
+`, args...)},
+		method{name: "Set" + up, src: fmt.Sprintf(`// Set%[3]s sets the %[2]s.
 func (%[1]s *%[4]s) Set%[3]s(%[7]s %[5]s) *%[4]s {
 	%[6]s.Touch(%[1]s)
 	%[1]s.%[2]s = %[7]s
 	return %[1]s
 }
-`, r, field, up, entity, typ, root, param(r))
-	return w.file(entity).AddDecls(src)
+`, args...)})
 }
 
 func (w *writer) addRelation(entity string, f FieldSpec) error {
@@ -138,13 +163,27 @@ func (w *writer) addRelation(entity string, f FieldSpec) error {
 			inv = lower(entity)
 		}
 		return w.manyToOne(f.Target, FieldSpec{Name: inv, Relation: ManyToOne, Target: entity, Inverse: f.Name,
-			Nullable: f.Nullable, OrphanRemoval: f.OrphanRemoval})
+			Nullable: f.Nullable, OrphanRemoval: f.OrphanRemoval, Cascade: f.Cascade, OnDelete: f.OnDelete})
 	case ManyToMany:
 		return w.manyToMany(entity, f)
 	case OneToOne:
 		return w.oneToOne(entity, f)
 	}
 	return fmt.Errorf("maker: unknown relation type %q (manyToOne, oneToMany, manyToMany, oneToOne)", f.Relation)
+}
+
+func cascade(tags []string, f FieldSpec) []string {
+	if len(f.Cascade) == 0 {
+		return tags
+	}
+	return append(tags, "cascade:"+strings.Join(f.Cascade, "|"))
+}
+
+func onDelete(tags []string, f FieldSpec) []string {
+	if f.OnDelete == "" {
+		return tags
+	}
+	return append(tags, "onDelete:"+f.OnDelete)
 }
 
 func (w *writer) toOneType(target string) string {
@@ -170,6 +209,7 @@ func (w *writer) manyToOne(owner string, f FieldSpec) error {
 	if !f.Nullable {
 		tags = append(tags, "notnull")
 	}
+	tags = onDelete(tags, f)
 	if err := w.file(owner).AddField(owner, w.fieldName(f.Name)+" "+w.toOneType(f.Target)+tag(tags), ""); err != nil {
 		return err
 	}
@@ -181,7 +221,7 @@ func (w *writer) manyToOne(owner string, f FieldSpec) error {
 	if f.Inverse == "" {
 		return nil
 	}
-	invTags := []string{"oneToMany", "mappedBy:" + w.fieldName(f.Name)}
+	invTags := cascade([]string{"oneToMany", "mappedBy:" + w.fieldName(f.Name)}, f)
 	if f.OrphanRemoval {
 		invTags = append(invTags, "orphanRemoval")
 	}
@@ -203,20 +243,22 @@ func (w *writer) collection(entity, prop, target string, tags []string) error {
 	return w.file(entity).AddField(entity, w.fieldName(prop)+" "+root+".Collection["+target+"]"+tag(tags), "")
 }
 
-// collectionMethods adds Items(), AddItem() and RemoveItem() with hooks that
-// keep the other side in sync.
+// collectionMethods adds Items(), AddItem(), RemoveItem() and SetItems()
+// with hooks that keep the other side in sync.
 func (w *writer) collectionMethods(entity, prop, target, onAdd, onRemove string) error {
 	r, field, up, one := recv(entity), lower(prop), upper(prop), upper(singular(prop))
 	if one == up {
 		one = up + "Item"
 	}
-	src := fmt.Sprintf(`// %[3]s returns the %[2]s.
+	args := []any{r, field, up, entity, target, one, onAdd, root, onRemove}
+	return w.addMethods(entity,
+		method{name: up, src: fmt.Sprintf(`// %[3]s returns the %[2]s.
 func (%[1]s *%[4]s) %[3]s() []*%[5]s {
 	%[8]s.Touch(%[1]s)
 	return %[1]s.%[2]s.All()
 }
-
-// Add%[6]s adds item to the %[2]s.
+`, args...)},
+		method{name: "Add" + one, src: fmt.Sprintf(`// Add%[6]s adds item to the %[2]s.
 func (%[1]s *%[4]s) Add%[6]s(item *%[5]s) *%[4]s {
 	%[8]s.Touch(%[1]s)
 	if !%[1]s.%[2]s.Contains(item) {
@@ -224,16 +266,28 @@ func (%[1]s *%[4]s) Add%[6]s(item *%[5]s) *%[4]s {
 %[7]s	}
 	return %[1]s
 }
-
-// Remove%[6]s removes item from the %[2]s.
+`, args...)},
+		method{name: "Remove" + one, src: fmt.Sprintf(`// Remove%[6]s removes item from the %[2]s.
 func (%[1]s *%[4]s) Remove%[6]s(item *%[5]s) *%[4]s {
 	%[8]s.Touch(%[1]s)
 	if %[1]s.%[2]s.Remove(item) {
 %[9]s	}
 	return %[1]s
 }
-`, r, field, up, entity, target, one, onAdd, root, onRemove)
-	return w.file(entity).AddDecls(src)
+`, args...)},
+		method{name: "Set" + up, imp: "slices", src: fmt.Sprintf(`// Set%[3]s replaces the %[2]s with items.
+func (%[1]s *%[4]s) Set%[3]s(items []*%[5]s) *%[4]s {
+	for _, item := range %[1]s.%[3]s() {
+		if !slices.Contains(items, item) {
+			%[1]s.Remove%[6]s(item)
+		}
+	}
+	for _, item := range items {
+		%[1]s.Add%[6]s(item)
+	}
+	return %[1]s
+}
+`, args...)})
 }
 
 func (w *writer) manyToMany(owner string, f FieldSpec) error {
@@ -249,6 +303,10 @@ func (w *writer) manyToMany(owner string, f FieldSpec) error {
 	if f.Inverse != "" {
 		tags = append(tags, "inversedBy:"+w.fieldName(f.Inverse))
 	}
+	if f.JoinTable != "" {
+		tags = append(tags, "joinTable:"+f.JoinTable)
+	}
+	tags = cascade(tags, f)
 	if err := w.collection(owner, f.Name, f.Target, tags); err != nil {
 		return err
 	}
@@ -291,6 +349,7 @@ func (w *writer) oneToOne(owner string, f FieldSpec) error {
 	if !f.Nullable {
 		tags = append(tags, "notnull")
 	}
+	tags = onDelete(cascade(tags, f), f)
 	if err := w.file(owner).AddField(owner, w.fieldName(f.Name)+" "+w.toOneType(f.Target)+tag(tags), ""); err != nil {
 		return err
 	}
