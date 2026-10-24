@@ -6,6 +6,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"strings"
 
 	"github.com/smatify/smorm/console"
 	"github.com/smatify/smorm/gen"
@@ -32,12 +33,14 @@ func makeMigration() console.Command {
 
 func generateCmd() console.Command {
 	var accessors *bool
+	var entities *string
 	return console.Command{
 		Name:        "make:generate",
 		Usage:       "[dir...]",
 		Description: "Regenerate entity accessors and field references",
 		Flags: func(fs *flag.FlagSet) {
 			accessors = fs.Bool("accessors", false, "also write missing getters/setters of mapped fields added by hand")
+			entities = fs.String("entity", "", "with -accessors: only these entities (comma separated)")
 		},
 		Run: func(_ context.Context, c *console.Ctx) error {
 			dirs := c.Args
@@ -49,7 +52,7 @@ func generateCmd() console.Command {
 					return fmt.Errorf("no entity directory configured")
 				}
 				if *accessors {
-					added, err := (&Maker{Dir: d}).Accessors()
+					added, err := (&Maker{Dir: d}).Accessors(splitList(*entities)...)
 					if err != nil {
 						return err
 					}
@@ -69,4 +72,15 @@ func generateCmd() console.Command {
 			return nil
 		},
 	}
+}
+
+// splitList splits a comma separated flag value.
+func splitList(v string) []string {
+	var out []string
+	for _, s := range strings.Split(v, ",") {
+		if s = strings.TrimSpace(s); s != "" {
+			out = append(out, s)
+		}
+	}
+	return out
 }

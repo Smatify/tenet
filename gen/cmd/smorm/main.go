@@ -1,7 +1,7 @@
 // Command smorm sets up projects and regenerates entity code:
 //
 //	smorm init --dialect postgres
-//	smorm generate [--accessors] [dir...]
+//	smorm generate [--accessors [--entity A,B]] [dir...]
 package main
 
 import (
@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strings"
 
 	"github.com/smatify/smorm/gen"
 	"github.com/smatify/smorm/gen/maker"
@@ -21,7 +22,7 @@ func main() { os.Exit(run(os.Args[1:], os.Stdout, os.Stderr)) }
 
 func run(args []string, out, errOut io.Writer) int {
 	if len(args) == 0 {
-		fmt.Fprintf(errOut, "usage: %s init --dialect <postgres|mysql|mariadb|sqlite|mssql> | generate [--accessors] [dir...] | rename-tags --to <key> [dir]\n", brand.CLIName)
+		fmt.Fprintf(errOut, "usage: %s init --dialect <postgres|mysql|mariadb|sqlite|mssql> | generate [--accessors [--entity A,B]] [dir...] | rename-tags --to <key> [dir]\n", brand.CLIName)
 		return 2
 	}
 	switch args[0] {
@@ -73,6 +74,7 @@ func run(args []string, out, errOut io.Writer) int {
 		fs := flag.NewFlagSet("generate", flag.ContinueOnError)
 		fs.SetOutput(errOut)
 		accessors := fs.Bool("accessors", false, "also write missing getters/setters of mapped fields added by hand")
+		entities := fs.String("entity", "", "with --accessors: only these entities (comma separated)")
 		if err := fs.Parse(args[1:]); err != nil {
 			return 2
 		}
@@ -82,7 +84,7 @@ func run(args []string, out, errOut io.Writer) int {
 		}
 		for _, d := range dirs {
 			if *accessors {
-				added, err := (&maker.Maker{Dir: d}).Accessors()
+				added, err := (&maker.Maker{Dir: d}).Accessors(strings.FieldsFunc(*entities, func(r rune) bool { return r == ',' })...)
 				if err != nil {
 					fmt.Fprintln(errOut, err)
 					return 1

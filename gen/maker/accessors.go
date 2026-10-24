@@ -7,6 +7,7 @@ import (
 	"go/types"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -26,11 +27,15 @@ type mappedField struct {
 // Accessors adds the getters and setters that are missing for the mapped
 // unexported fields of the entities in Dir (collection methods for to-many
 // associations), e.g. after fields were added by hand. Existing methods are
-// kept. It returns the added methods as "Entity.Method".
-func (mk *Maker) Accessors() ([]string, error) {
+// kept; with entities given only those are completed. It returns the
+// added methods as "Entity.Method".
+func (mk *Maker) Accessors(entities ...string) ([]string, error) {
 	fields, existing, err := scanEntities(mk.Dir)
 	if err != nil {
 		return nil, err
+	}
+	if len(entities) > 0 {
+		fields = slices.DeleteFunc(fields, func(f mappedField) bool { return !slices.Contains(entities, f.entity) })
 	}
 	// Methods present after this run, for the hooks that sync the other
 	// side of an association.

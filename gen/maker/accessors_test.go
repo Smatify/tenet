@@ -47,7 +47,10 @@ type Tag struct {
 	if err := os.WriteFile(filepath.Join(entDir, "team.go"), []byte(src), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	added, err := (&Maker{Dir: entDir}).Accessors()
+	if only, err := (&Maker{Dir: entDir}).Accessors("Nope"); err != nil || len(only) != 0 {
+		t.Fatalf("filtered = %v, %v", only, err)
+	}
+	added, err := (&Maker{Dir: entDir}).Accessors("Team", "Player")
 	if err != nil {
 		t.Fatal(err)
 	}
