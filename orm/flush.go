@@ -328,6 +328,9 @@ func (em *EntityManager) Flush(ctx context.Context) error {
 	}
 	if err != nil {
 		em.closed = true
+		if em.txDepth == 0 {
+			em.rollbackEvent(ctx)
+		}
 		return err
 	}
 	for _, e := range ordered {
@@ -355,7 +358,16 @@ func (em *EntityManager) Flush(ctx context.Context) error {
 		em.forget(e)
 	}
 	em.compact()
+	if em.txDepth > 0 {
+		em.postFlushes++ // dispatched by Transactional after the commit
+		return nil
+	}
 	return em.events.dispatch(ctx, EventPostFlush, &EventArgs{EM: em})
+}
+
+// rollbackEvent tells listeners that collected writes were rolled back.
+func (em *EntityManager) rollbackEvent(ctx context.Context) {
+	_ = em.events.dispatch(ctx, EventOnRollback, &EventArgs{EM: em})
 }
 
 // prepareUpdate computes the change set of a managed entity and runs the

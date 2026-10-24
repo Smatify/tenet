@@ -35,6 +35,7 @@ const (
 	EventPostLoad    = orm.EventPostLoad
 	EventOnFlush     = orm.EventOnFlush
 	EventPostFlush   = orm.EventPostFlush
+	EventOnRollback  = orm.EventOnRollback
 )
 
 // NewEventManager returns an event manager to share between entity managers.

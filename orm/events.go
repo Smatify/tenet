@@ -100,10 +100,13 @@ const (
 	EventPostLoad    Event = "postLoad"
 	EventOnFlush     Event = "onFlush"   // after change sets are computed, before writing
 	EventPostFlush   Event = "postFlush" // after a successful commit
+	// EventOnRollback follows a flush whose writes were rolled back (also
+	// by Transactional): listeners forget what they collected for args.EM.
+	EventOnRollback Event = "onRollback"
 )
 
 // EventArgs is passed to listeners. Entity, Meta and ChangeSet are empty for
-// onFlush and postFlush.
+// onFlush, postFlush and onRollback.
 type EventArgs struct {
 	EM        *EntityManager
 	Entity    any

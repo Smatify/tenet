@@ -7,9 +7,17 @@ import (
 
 	"github.com/smatify/smorm"
 	"github.com/smatify/smorm/dbal"
+	"github.com/smatify/smorm/mapping"
 )
 
-func init() { Register(Case{"ORM/LifecycleHooksAndEvents", testORMEvents}) }
+type ormNoTable struct {
+	smorm.Entity `smorm:"table:orm_no_table"`
+	smorm.UUIDID
+}
+
+func init() {
+	Register(Case{"ORM/LifecycleHooksAndEvents", testORMEvents}, Case{"ORM/PostFlushAfterCommit", testORMPostFlushAfterCommit})
+}
 
 type ormHooked struct {
 	smorm.Entity `smorm:"table:orm_hooked"`
@@ -60,5 +68,57 @@ func testORMEvents(t *testing.T, db *dbal.DB) {
 	must(t, err)
 	if again.Slug != "changed" {
 		t.Fatalf("PreUpdate change not written: %+v", again)
+	}
+}
+
+// postFlush follows the commit, also in Transactional; rolled back writes
+// are followed by onRollback instead.
+func testORMPostFlushAfterCommit(t *testing.T, db *dbal.DB) {
+	ctx := context.Background()
+	newEM := setupORM(t, db, ormHooked{})
+	events := smorm.NewEventManager()
+	var log []string
+	events.On(func(_ context.Context, a *smorm.EventArgs) error {
+		log = append(log, "postPersist")
+		return nil
+	}, smorm.EventPostPersist)
+	events.On(func(_ context.Context, a *smorm.EventArgs) error {
+		log = append(log, "postFlush")
+		return nil
+	}, smorm.EventPostFlush)
+	events.On(func(_ context.Context, a *smorm.EventArgs) error {
+		log = append(log, "onRollback")
+		return nil
+	}, smorm.EventOnRollback)
+	reg := newEM().Registry()
+	em := smorm.NewEntityManager(db, smorm.WithRegistry(reg), smorm.WithEvents(events))
+	must(t, em.Transactional(ctx, func(ctx context.Context, em *smorm.EntityManager) error {
+		must(t, em.Persist(&ormHooked{Title: "a"}))
+		must(t, em.Flush(ctx))
+		must(t, em.Persist(&ormHooked{Title: "b"}))
+		log = append(log, "fn")
+		return nil
+	}))
+	if got := strings.Join(log, ","); got != "postPersist,fn,postPersist,postFlush,postFlush" {
+		t.Fatalf("committed: %s", got)
+	}
+
+	log = nil
+	err := em.Transactional(ctx, func(ctx context.Context, em *smorm.EntityManager) error {
+		must(t, em.Persist(&ormHooked{Title: "c"}))
+		must(t, em.Flush(ctx))
+		return context.Canceled
+	})
+	if err != context.Canceled || strings.Join(log, ",") != "postPersist,onRollback" {
+		t.Fatalf("rolled back: %v %v", err, log)
+	}
+
+	log = nil
+	missing := mapping.NewRegistry() // its table does not exist
+	must(t, missing.Register(ormNoTable{}))
+	failing := smorm.NewEntityManager(db, smorm.WithRegistry(missing), smorm.WithEvents(events))
+	must(t, failing.Persist(&ormNoTable{}))
+	if err := failing.Flush(ctx); err == nil || strings.Join(log, ",") != "onRollback" {
+		t.Fatalf("failed flush: %v %v", err, log)
 	}
 }

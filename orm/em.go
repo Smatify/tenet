@@ -28,8 +28,12 @@ type EntityManager struct {
 	batchSize int
 	noLazy    bool
 	lazyHook  func(LazyLoad)
-	filters   *Filters
-	cache     cache.Cache
+	// txDepth counts running Transactional calls; their flushes count
+	// postFlushes, which are dispatched after the commit.
+	txDepth     int
+	postFlushes int
+	filters     *Filters
+	cache       cache.Cache
 	// resolving is set while references are loaded: a reference points to
 	// a row that exists, so soft-deleted targets load too.
 	resolving bool
@@ -493,12 +497,14 @@ func related(meta *mapping.Entity, ptr any, a *mapping.Association) []any {
 }
 
 // Transactional runs fn in a transaction and flushes before committing. If
-// fn or the flush fails, the transaction is rolled back.
+// fn or the flush fails, the transaction is rolled back and listeners get
+// onRollback; postFlush of the flushes inside runs after the commit.
 func (em *EntityManager) Transactional(ctx context.Context, fn func(ctx context.Context, em *EntityManager) error) error {
 	if em.closed {
 		return ErrClosed
 	}
-	return em.db.RunInTx(ctx, nil, func(ctx context.Context, tx *dbal.Tx) error {
+	em.txDepth++
+	err := em.db.RunInTx(ctx, nil, func(ctx context.Context, tx *dbal.Tx) error {
 		prev := em.db
 		em.db = tx
 		defer func() { em.db = prev }()
@@ -507,6 +513,25 @@ func (em *EntityManager) Transactional(ctx context.Context, fn func(ctx context.
 		}
 		return em.Flush(ctx)
 	})
+	em.txDepth--
+	if em.txDepth > 0 {
+		return err
+	}
+	// postFlush waits for the commit of the outermost transaction.
+	n := em.postFlushes
+	em.postFlushes = 0
+	if err != nil {
+		if n > 0 || em.closed {
+			em.rollbackEvent(ctx)
+		}
+		return err
+	}
+	for range n {
+		if err := em.events.dispatch(ctx, EventPostFlush, &EventArgs{EM: em}); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // convertTo converts v to type t when possible (e.g. int to int64 for IDs).
