@@ -83,6 +83,19 @@ func testORMFilters(t *testing.T, db *dbal.DB) {
 	if !em3.Filters().IsEnabled("tenant") || len(em3.Filters().Enabled()) != 2 {
 		t.Fatal("Enabled")
 	}
+	// A reference to a soft-deleted entity still resolves (the row exists):
+	// lazily and preloaded.
+	lazy, err := smorm.Find[sdComment](ctx, newEM(), c2.ID())
+	must(t, err)
+	smorm.Touch(lazy.Post)
+	if lazy.Post.Title != "b" {
+		t.Fatalf("lazy reference to a deleted post = %q", lazy.Post.Title)
+	}
+	preloaded, err := smorm.NewQuery[sdComment](newEM()).Where(smorm.Eq("ID", c2.ID())).With("Post").All(ctx)
+	must(t, err)
+	if len(preloaded) != 1 || preloaded[0].Post.Title != "b" {
+		t.Fatalf("preloaded reference to a deleted post = %v", preloaded)
+	}
 	// Restore and hard delete with the soft delete filter disabled.
 	em4 := newEM()
 	em4.Filters().Disable(smorm.SoftDeleteFilterName)
