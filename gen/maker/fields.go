@@ -250,7 +250,11 @@ func (w *writer) collectionMethods(entity, prop, target, onAdd, onRemove string)
 	if one == up {
 		one = up + "Item"
 	}
-	args := []any{r, field, up, entity, target, one, onAdd, root, onRemove}
+	remove := fmt.Sprintf("\tif %s.%s.Remove(item) {\n%s\t}\n", r, field, onRemove)
+	if onRemove == "" {
+		remove = fmt.Sprintf("\t%s.%s.Remove(item)\n", r, field)
+	}
+	args := []any{r, field, up, entity, target, one, onAdd, root, remove}
 	return w.addMethods(entity,
 		method{name: up, src: fmt.Sprintf(`// %[3]s returns the %[2]s.
 func (%[1]s *%[4]s) %[3]s() []*%[5]s {
@@ -270,9 +274,7 @@ func (%[1]s *%[4]s) Add%[6]s(item *%[5]s) *%[4]s {
 		method{name: "Remove" + one, src: fmt.Sprintf(`// Remove%[6]s removes item from the %[2]s.
 func (%[1]s *%[4]s) Remove%[6]s(item *%[5]s) *%[4]s {
 	%[8]s.Touch(%[1]s)
-	if %[1]s.%[2]s.Remove(item) {
-%[9]s	}
-	return %[1]s
+%[9]s	return %[1]s
 }
 `, args...)},
 		method{name: "Set" + up, imp: "slices", src: fmt.Sprintf(`// Set%[3]s replaces the %[2]s with items.

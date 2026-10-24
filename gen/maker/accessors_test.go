@@ -16,16 +16,16 @@ func TestAccessorsForHandWrittenFields(t *testing.T) {
 	if err := os.MkdirAll(entDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	src := strings.ReplaceAll(`package entity
+	src := `package entity
 
 import "github.com/smatify/smorm"
 
 type Team struct {
 	smorm.Entity
 	smorm.UUIDID
-	title   string                    `+"`smorm:\"length:50\"`"+`
-	players smorm.Collection[Player]  `+"`smorm:\"oneToMany,mappedBy:team\"`"+`
-	cache   string                    `+"`smorm:\"-\"`"+`
+	title   string                    ` + "`smorm:\"length:50\"`" + `
+	players smorm.Collection[Player]  ` + "`smorm:\"oneToMany,mappedBy:team\"`" + `
+	cache   string                    ` + "`smorm:\"-\"`" + `
 }
 
 // Title is written by hand and kept.
@@ -34,9 +34,16 @@ func (t *Team) Title() string { smorm.Touch(t); return "team " + t.title }
 type Player struct {
 	smorm.Entity
 	smorm.UUIDID
-	team *Team `+"`smorm:\"manyToOne,inversedBy:players\"`"+`
+	team    *Team ` + "`smorm:\"manyToOne,inversedBy:players\"`" + `
+	version int32 ` + "`smorm:\"version\"`" + `
+	tags    smorm.Collection[Tag] ` + "`smorm:\"manyToMany\"`" + `
 }
-`, "smorm", "smorm")
+
+type Tag struct {
+	smorm.Entity
+	smorm.UUIDID
+}
+`
 	if err := os.WriteFile(filepath.Join(entDir, "team.go"), []byte(src), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -44,7 +51,8 @@ type Player struct {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := []string{"Team.SetTitle", "Team.Players", "Team.AddPlayer", "Team.RemovePlayer", "Team.SetPlayers", "Player.Team", "Player.SetTeam"}
+	want := []string{"Team.SetTitle", "Team.Players", "Team.AddPlayer", "Team.RemovePlayer", "Team.SetPlayers", "Player.Team", "Player.SetTeam",
+		"Player.Tags", "Player.AddTag", "Player.RemoveTag", "Player.SetTags"}
 	slices.Sort(added)
 	slices.Sort(want)
 	if !slices.Equal(added, want) {
@@ -55,7 +63,8 @@ type Player struct {
 	}
 	goCmd(t, dir, "vet", "./...")
 	out, _ := os.ReadFile(filepath.Join(entDir, "team.go"))
-	for _, s := range []string{`return "team " + t.title`, "item.SetTeam(t)", "if item.Team() == t {"} {
+	for _, s := range []string{`return "team " + t.title`, "item.SetTeam(t)", "if item.Team() == t {", "\tp.tags.Remove(item)\n\treturn p",
+		"import (\n\t\"slices\"\n\n\t\"github.com/smatify/smorm\"\n)"} {
 		if !strings.Contains(string(out), s) {
 			t.Errorf("team.go misses %q:\n%s", s, out)
 		}

@@ -10,7 +10,9 @@ import (
 	"go/parser"
 	"go/token"
 	"os"
+	"slices"
 	"strconv"
+	"strings"
 
 	"github.com/dave/dst"
 	"github.com/dave/dst/decorator"
@@ -148,9 +150,30 @@ func (f *File) AddImport(path, name string) {
 	for _, d := range f.f.Decls {
 		if g, ok := d.(*dst.GenDecl); ok && g.Tok == token.IMPORT {
 			for _, s := range g.Specs {
-				s.Decorations().After = dst.NewLine
+				if s.Decorations().After == dst.None {
+					s.Decorations().After = dst.NewLine
+				}
 			}
-			g.Specs = append(g.Specs, spec)
+			// Standard library imports go after the last one of the
+			// first group, others at the end.
+			at := len(g.Specs)
+			if isStd(path) {
+				at = 0
+				for i, s := range g.Specs {
+					if p, _ := strconv.Unquote(s.(*dst.ImportSpec).Path.Value); isStd(p) {
+						at = i + 1
+					}
+				}
+				switch {
+				case at == 0 && len(g.Specs) > 0:
+					spec.Decs.After = dst.EmptyLine
+				case at > 0:
+					// Take over the separator to the next group.
+					prev := g.Specs[at-1].Decorations()
+					spec.Decs.After, prev.After = prev.After, dst.NewLine
+				}
+			}
+			g.Specs = slices.Insert(g.Specs, at, dst.Spec(spec))
 			if len(g.Specs) > 1 {
 				g.Lparen = true
 			}
@@ -161,6 +184,13 @@ func (f *File) AddImport(path, name string) {
 	g := &dst.GenDecl{Tok: token.IMPORT, Specs: []dst.Spec{spec}}
 	f.f.Decls = append([]dst.Decl{g}, f.f.Decls...)
 	f.f.Imports = append(f.f.Imports, spec)
+}
+
+// isStd reports whether path belongs to the standard library (no dot in
+// its first element).
+func isStd(path string) bool {
+	first, _, _ := strings.Cut(path, "/")
+	return !strings.Contains(first, ".")
 }
 
 // Source renders the file (gofmt formatted, imports sorted).

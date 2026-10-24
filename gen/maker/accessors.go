@@ -15,7 +15,8 @@ import (
 	"github.com/smatify/smorm/mapping"
 )
 
-// mappedField is an unexported mapped field of an entity struct.
+// mappedField is an unexported mapped field of an entity struct (not the
+// identifier or the version, which smorm sets itself).
 type mappedField struct {
 	entity, name, typ string
 	tag               mapping.Tag
@@ -215,7 +216,7 @@ func structFields(entity string, st *ast.StructType, root string) ([]mappedField
 		if err != nil {
 			return nil, err
 		}
-		if tag.Has("id") || tag.Has("pk") || tag.Has("embedded") {
+		if tag.Has("id") || tag.Has("pk") || tag.Has("embedded") || tag.Has("version") {
 			continue
 		}
 		typ := types.ExprString(f.Type)

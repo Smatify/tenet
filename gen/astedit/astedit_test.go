@@ -61,7 +61,7 @@ func TestEdit(t *testing.T) {
 	s := string(out)
 	for _, want := range []string{
 		"// Package blog is a test.", "title string // the title", "// the content\n\tbody string `orm:\"type:text\"`",
-		"// Body returns the body.\nfunc (p *Post) Body() string", "import (\n\tex \"example.com/x\"\n\t\"fmt\"\n\t\"time\"\n)",
+		"// Body returns the body.\nfunc (p *Post) Body() string", "import (\n\t\"fmt\"\n\t\"time\"\n\n\tex \"example.com/x\"\n)",
 	} {
 		if !strings.Contains(s, want) {
 			t.Errorf("missing %q in\n%s", want, s)
@@ -85,6 +85,14 @@ func TestAddImportWithoutImports(t *testing.T) {
 	}
 	if !strings.Contains(string(out), "import (\n\t\"context\"\n\t\"time\"\n)") {
 		t.Fatalf("got\n%s", out)
+	}
+	// The standard library goes into its own group before other imports.
+	g, _ := Parse("y.go", []byte("package y\n\nimport \"example.com/z\"\n"))
+	g.AddImport("slices", "")
+	g.AddImport("example.com/a", "")
+	g.AddImport("time", "")
+	if out, _ := g.Source(); !strings.Contains(string(out), "import (\n\t\"slices\"\n\t\"time\"\n\n\t\"example.com/a\"\n\t\"example.com/z\"\n)") {
+		t.Fatalf("groups:\n%s", out)
 	}
 	if _, err := Parse("bad.go", []byte("package")); err == nil {
 		t.Fatal("parse error")
