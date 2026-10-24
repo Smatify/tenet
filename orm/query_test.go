@@ -186,3 +186,28 @@ func TestQueryExecution(t *testing.T) {
 		t.Fatal("no rows")
 	}
 }
+
+func TestRawExpandsSlicesAfterIn(t *testing.T) {
+	em := queryEM(t)
+	for in, want := range map[string]string{
+		`{ID} IN ? AND {Name} = ?`:         `"t0"."id" IN ($1, $2) AND "t0"."name" = $3`,
+		`{ID} in (?) AND {Name} = ?`:       `"t0"."id" in ($1, $2) AND "t0"."name" = $3`,
+		`{ID} NOT IN ( ? ) AND {Name} = ?`: `"t0"."id" NOT IN ($1, $2) AND "t0"."name" = $3`,
+		`{ID} = ANY(?) AND {Name} = ?`:     `"t0"."id" = ANY($1) AND "t0"."name" = $2`,
+		`'IN ?' = ? AND {Name} = ?`:        `'IN ?' = $1 AND "t0"."name" = $2`,
+	} {
+		s, args, err := em.NewQuery(typeOf[qAuthor]()).Where(Raw(in, []int64{1, 2}, "x")).SQL()
+		if err != nil || !strings.Contains(s, want) {
+			t.Errorf("%s:\n got: %s %v\nwant: %s", in, s, err, want)
+		}
+		if strings.Contains(want, "ANY") || strings.HasPrefix(in, "'") {
+			if len(args) != 2 {
+				t.Errorf("%s: args = %v", in, args)
+			}
+		}
+	}
+	s, _, _ := em.NewQuery(typeOf[qAuthor]()).Where(Raw(`{ID} IN ?`, []int64{})).SQL()
+	if !strings.Contains(s, `IN (NULL)`) {
+		t.Fatal(s)
+	}
+}

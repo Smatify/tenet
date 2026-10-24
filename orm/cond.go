@@ -1,9 +1,12 @@
 package orm
 
 import (
+	"database/sql/driver"
 	"fmt"
 	"reflect"
 	"regexp"
+	"slices"
+	"strings"
 
 	"github.com/smatify/smorm/dbal"
 	"github.com/smatify/smorm/internal/entity"
@@ -180,7 +183,60 @@ var fieldPlaceholder = regexp.MustCompile(`\{([A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z
 
 // Raw is a SQL condition with ? arguments. {Field} or {alias.Field} is
 // replaced by the quoted column, e.g. Raw("LOWER({a.Name}) = ?", "ann").
+// A slice after IN is expanded: Raw("{ID} IN ?", ids) or "IN (?)"; elsewhere
+// (e.g. "= ANY(?)") it is passed as one array parameter.
 func Raw(sql string, args ...any) Cond { return rawCond{sql, args} }
+
+var inBefore = regexp.MustCompile(`(?i)\bIN\s*(\(\s*)?$`)
+
+// expandIn wraps slice arguments of "IN ?" and "IN (?)" in dbal.In.
+func expandIn(sql string, args []any) (string, []any) {
+	var b strings.Builder
+	out := slices.Clone(args)
+	n, inString := 0, false
+	for i := 0; i < len(sql); i++ {
+		c := sql[i]
+		switch {
+		case c == '\'':
+			inString = !inString
+		case c == '?' && !inString && i+1 < len(sql) && sql[i+1] == '?':
+			b.WriteString("??")
+			i++
+			continue
+		case c == '?' && !inString:
+			if n < len(args) && isSlice(args[n]) {
+				if m := inBefore.FindStringSubmatch(b.String()); m != nil {
+					out[n] = dbal.In(args[n])
+					rest := strings.TrimLeft(sql[i+1:], " \t\n")
+					if m[1] != "" && strings.HasPrefix(rest, ")") {
+						// "IN (?)": In writes the parentheses.
+						kept := strings.TrimSuffix(b.String(), m[1])
+						b.Reset()
+						b.WriteString(kept)
+						b.WriteByte('?')
+						i = len(sql) - len(rest)
+						n++
+						continue
+					}
+				}
+			}
+			n++
+		}
+		b.WriteByte(c)
+	}
+	return b.String(), out
+}
+
+func isSlice(v any) bool {
+	if _, ok := v.(driver.Valuer); ok {
+		return false
+	}
+	if _, ok := v.(dbal.Expr); ok {
+		return false
+	}
+	t := reflect.TypeOf(v)
+	return t != nil && (t.Kind() == reflect.Slice || t.Kind() == reflect.Array) && t.Elem().Kind() != reflect.Uint8
+}
 
 func (r rawCond) build(q *Query) (dbal.Expr, error) {
 	var err error
@@ -198,5 +254,6 @@ func (r rawCond) build(q *Query) (dbal.Expr, error) {
 	if err != nil {
 		return nil, err
 	}
-	return dbal.SQL(out, r.args...), nil
+	out, args := expandIn(out, r.args)
+	return dbal.SQL(out, args...), nil
 }

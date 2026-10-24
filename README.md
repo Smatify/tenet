@@ -58,6 +58,8 @@ See [examples/blog](examples/blog) for a complete project generated this way.
   strings (`"title"`, `"a.name"` for a joined alias, `"author.tags"` as preload path).
   `go run github.com/smatify/smorm/gen/cmd/vet ./...` reports string field names the
   entity does not have, and field accesses without `smorm.Touch`.
+  `smorm.Raw("{title} ILIKE ? OR {id} IN ?", pattern, ids)` inserts columns for `{field}`;
+  a slice after `IN` is expanded, anywhere else (`= ANY(?)`) it is one array parameter.
 - **Migrations**: versioned Go or SQL files, `make:migration` diffs entities against the database.
 
 ## Lazy loading
