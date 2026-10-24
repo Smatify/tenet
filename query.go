@@ -48,10 +48,10 @@ func NewQuery[T any](em *EntityManager) *Query[T] {
 }
 
 // Join adds an INNER JOIN over an association ("Author" or "a.Posts").
-func (q *Query[T]) Join(path, alias string) *Query[T] { q.q.Join(path, alias); return q }
+func (q *Query[T]) Join(path any, alias string) *Query[T] { q.q.Join(path, alias); return q }
 
 // LeftJoin adds a LEFT JOIN over an association.
-func (q *Query[T]) LeftJoin(path, alias string) *Query[T] { q.q.LeftJoin(path, alias); return q }
+func (q *Query[T]) LeftJoin(path any, alias string) *Query[T] { q.q.LeftJoin(path, alias); return q }
 
 // Where adds conditions joined with AND.
 func (q *Query[T]) Where(conds ...Cond) *Query[T] { q.q.Where(conds...); return q }
@@ -72,7 +72,7 @@ func (q *Query[T]) WithoutFilter(names ...string) *Query[T] { q.q.WithoutFilter(
 func (q *Query[T]) WithDeleted() *Query[T] { q.q.WithDeleted(); return q }
 
 // With preloads association paths of the results.
-func (q *Query[T]) With(paths ...string) *Query[T] { q.q.With(paths...); return q }
+func (q *Query[T]) With(paths ...any) *Query[T] { q.q.With(paths...); return q }
 
 // ForUpdate locks the selected rows.
 func (q *Query[T]) ForUpdate() *Query[T] { q.q.ForUpdate(); return q }
@@ -165,7 +165,7 @@ type Criteria map[string]any
 type FindOption func(*orm.Query)
 
 // OrderBy sorts FindBy results.
-func OrderBy(field string, dir dbal.Order) FindOption {
+func OrderBy(field any, dir dbal.Order) FindOption {
 	return func(q *orm.Query) { q.OrderBy(field, dir) }
 }
 
@@ -176,7 +176,7 @@ func Limit(n int) FindOption { return func(q *orm.Query) { q.Limit(n) } }
 func Offset(n int) FindOption { return func(q *orm.Query) { q.Offset(n) } }
 
 // With preloads associations of FindBy results.
-func With(paths ...string) FindOption { return func(q *orm.Query) { q.With(paths...) } }
+func With(paths ...any) FindOption { return func(q *orm.Query) { q.With(paths...) } }
 
 // Repository gives typed access to the entities of T, like Doctrine's
 // EntityRepository. Embed it in custom repositories:

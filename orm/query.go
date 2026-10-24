@@ -66,19 +66,32 @@ func (q *Query) fail(err error) *Query {
 }
 
 // Join adds an INNER JOIN over an association. path is "Assoc" (from the
-// root) or "alias.Assoc"; the joined entity is reachable as alias.
-func (q *Query) Join(path, alias string) *Query { return q.join(path, alias, false) }
+// root), "alias.Assoc" or a mapping.FieldRef of an entity in the query; the
+// joined entity is reachable as alias.
+func (q *Query) Join(path any, alias string) *Query { return q.join(path, alias, false) }
 
 // LeftJoin adds a LEFT JOIN over an association.
-func (q *Query) LeftJoin(path, alias string) *Query { return q.join(path, alias, true) }
+func (q *Query) LeftJoin(path any, alias string) *Query { return q.join(path, alias, true) }
 
-func (q *Query) join(path, alias string, left bool) *Query {
+func (q *Query) join(ref any, alias string, left bool) *Query {
 	if q.err != nil {
 		return q
 	}
-	from, name := RootAlias, path
-	if i := strings.IndexByte(path, '.'); i >= 0 {
-		from, name = path[:i], path[i+1:]
+	var from, name, path string
+	switch r := ref.(type) {
+	case string:
+		from, name, path = RootAlias, r, r
+		if i := strings.IndexByte(r, '.'); i >= 0 {
+			from, name = r[:i], r[i+1:]
+		}
+	case mapping.FieldRef:
+		a, err := q.aliasOf(r)
+		if err != nil {
+			return q.fail(err)
+		}
+		from, name, path = a, r.Name, a+"."+r.Name
+	default:
+		return q.fail(fmt.Errorf("query: unsupported join path %T", ref))
 	}
 	src, ok := q.aliases[from]
 	if !ok {
@@ -112,8 +125,27 @@ func (q *Query) Limit(n int) *Query { q.limit = n; return q }
 // Offset skips results.
 func (q *Query) Offset(n int) *Query { q.offset = n; return q }
 
-// With preloads association paths of the results (see EntityManager.Preload).
-func (q *Query) With(paths ...string) *Query { q.with = append(q.with, paths...); return q }
+// With preloads association paths of the results (see EntityManager.Preload):
+// "Assoc", "Assoc.Nested" or a mapping.FieldRef of the root entity.
+func (q *Query) With(paths ...any) *Query {
+	if q.err != nil {
+		return q
+	}
+	for _, p := range paths {
+		switch r := p.(type) {
+		case string:
+			q.with = append(q.with, r)
+		case mapping.FieldRef:
+			if r.Entity != q.meta.Name {
+				return q.fail(fmt.Errorf("query: With(%s.%s) on a query of %s", r.Entity, r.Name, q.meta.Name))
+			}
+			q.with = append(q.with, r.Name)
+		default:
+			return q.fail(fmt.Errorf("query: unsupported preload path %T", p))
+		}
+	}
+	return q
+}
 
 // WithoutFilter disables the named filters for this query only (its root
 // and joined entities; preloads keep the filters of the entity manager).
@@ -173,24 +205,11 @@ func (q *Query) resolve(ref any) (string, *mapping.Field, error) {
 			}
 		}
 	case mapping.FieldRef:
-		alias = ""
-		for a, m := range q.aliases {
-			if m.Name == r.Entity {
-				if alias != "" && alias != RootAlias {
-					if a == RootAlias {
-						alias = a
-						continue
-					}
-					return "", nil, fmt.Errorf("query: %s.%s is ambiguous; use \"alias.%s\"", r.Entity, r.Name, r.Name)
-				}
-				if alias == "" || a == RootAlias {
-					alias = a
-				}
-			}
+		a, err := q.aliasOf(r)
+		if err != nil {
+			return "", nil, err
 		}
-		if alias == "" {
-			return "", nil, fmt.Errorf("query: entity %s is not part of the query", r.Entity)
-		}
+		alias = a
 		name = r.Name
 	default:
 		return "", nil, fmt.Errorf("query: unsupported field reference %T", ref)
@@ -212,6 +231,28 @@ func (q *Query) resolve(ref any) (string, *mapping.Field, error) {
 		return "", nil, fmt.Errorf("query: %s has no field %q", m.Name, name)
 	}
 	return alias + "." + f.Column, f, nil
+}
+
+// aliasOf returns the alias of the entity a FieldRef belongs to: the root if
+// it is that entity, otherwise the only join of it.
+func (q *Query) aliasOf(r mapping.FieldRef) (string, error) {
+	alias := ""
+	for a, m := range q.aliases {
+		if m.Name != r.Entity {
+			continue
+		}
+		if a == RootAlias {
+			return a, nil
+		}
+		if alias != "" {
+			return "", fmt.Errorf("query: %s.%s is ambiguous; use \"alias.%s\"", r.Entity, r.Name, r.Name)
+		}
+		alias = a
+	}
+	if alias == "" {
+		return "", fmt.Errorf("query: entity %s is not part of the query", r.Entity)
+	}
+	return alias, nil
 }
 
 // build renders the query. countOnly selects COUNT instead of entities.

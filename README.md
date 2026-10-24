@@ -16,10 +16,10 @@ post, _ := smorm.Find[entity.Post](ctx, em, id)  // identity map
 post.Author().Name()                             // lazy loading (batched, no N+1)
 
 posts, _ := smorm.NewQuery[entity.Post](em).
-	Join("Author", "a").
-	Where(smorm.Like("a.Name", "A%")).
-	OrderBy("Title", smorm.Asc).
-	With("Tags").                               // preload
+	Join(entity.PostFields.Author, "a").
+	Where(smorm.Like(entity.AuthorFields.Name, "A%")).
+	OrderBy(entity.PostFields.Title, smorm.Asc).
+	With(entity.PostFields.Tags).                // preload
 	All(ctx)
 ```
 
@@ -54,6 +54,10 @@ See [examples/blog](examples/blog) for a complete project generated this way.
   `Transactional`; only changed columns are written; lifecycle hooks and an event manager.
 - **Associations**: manyToOne, oneToMany, oneToOne, manyToMany with `smorm.Collection[T]`
   (lazy, extra lazy), cascades, orphan removal, `Preload` and `fetch:eager`.
+- **Queries** name fields with the generated refs (`entity.PostFields.Title`) or with
+  strings (`"title"`, `"a.name"` for a joined alias, `"author.tags"` as preload path).
+  `go run github.com/smatify/smorm/gen/cmd/vet ./...` reports string field names the
+  entity does not have, and field accesses without `smorm.Touch`.
 - **Migrations**: versioned Go or SQL files, `make:migration` diffs entities against the database.
 
 The name `smorm` is defined once in `internal/brand`; `scripts/rebrand.sh <name>`

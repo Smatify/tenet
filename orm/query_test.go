@@ -92,6 +92,15 @@ func TestQuerySQL(t *testing.T) {
 	if _, _, err := em.NewQuery(typeOf[qBook]()).Join("Author", "a").Join("a.Books", "b2").Join("b2.Author", "a3").Where(Eq(ref, "x")).SQL(); err == nil {
 		t.Fatal("ambiguous FieldRef")
 	}
+	// Join takes FieldRefs of the root or of a joined entity.
+	viaRef := em.NewQuery(typeOf[qBook]()).Join(mapping.FieldRef{Entity: "qBook", Name: "Author"}, "a").
+		Join(mapping.FieldRef{Entity: "qAuthor", Name: "Tags"}, "tg")
+	if s := sqlOf(t, viaRef); !strings.Contains(s, `INNER JOIN "qa" AS "a" ON "a"."id" = "t0"."author_id"`) || !strings.Contains(s, `"tg_jt"."q_author_id" = "a"."id"`) {
+		t.Fatalf("join via FieldRef: %s", s)
+	}
+	if w := em.NewQuery(typeOf[qBook]()).With(mapping.FieldRef{Entity: "qBook", Name: "Author"}, "Author.Tags"); w.err != nil || strings.Join(w.with, ",") != "Author,Author.Tags" {
+		t.Fatalf("With: %v %v", w.with, w.err)
+	}
 	c := em.NewQuery(typeOf[qAuthor]()).Where(Eq("Name", "x"))
 	d := c.Clone().Where(Eq("ID", 1))
 	if sqlOf(t, c) == sqlOf(t, d) {
@@ -120,6 +129,11 @@ func TestQueryErrors(t *testing.T) {
 		em.NewQuery(typeOf[qAuthor]()).Where(Raw("{Nope} = 1")),
 		em.NewQuery(typeOf[qAuthor]()).Where(And(Eq("Nope", 1))),
 		em.NewQuery(typeOf[qAuthor]()).OrderBy("Nope", dbal.Asc),
+		em.NewQuery(typeOf[qAuthor]()).Join(42, "b"),
+		em.NewQuery(typeOf[qAuthor]()).Join(mapping.FieldRef{Entity: "qBook", Name: "Author"}, "a"),
+		em.NewQuery(typeOf[qAuthor]()).With(mapping.FieldRef{Entity: "qBook", Name: "Author"}),
+		em.NewQuery(typeOf[qAuthor]()).With(42),
+		em.NewQuery(typeOf[int]()).With("Books"),
 	}
 	for i, q := range cases {
 		if _, _, err := q.SQL(); err == nil {

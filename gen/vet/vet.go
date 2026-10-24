@@ -1,6 +1,7 @@
 // Package vet provides a go/analysis analyzer that finds direct accesses to
-// unexported entity fields that are not preceded by smorm.Touch. Such code
-// reads zero values from uninitialized references (lazy loading proxies).
+// unexported entity fields that are not preceded by smorm.Touch (such code
+// reads zero values from uninitialized references, lazy loading proxies),
+// and field names in queries that the entity does not have.
 package vet
 
 import (
@@ -26,10 +27,10 @@ const (
 // IgnoreDirective in a function's doc comment disables the check for it.
 var IgnoreDirective = brand.Name + "vet:ignore"
 
-// Analyzer reports field accesses without Touch.
+// Analyzer reports field accesses without Touch and unknown field names.
 var Analyzer = &analysis.Analyzer{
 	Name:     brand.Name + "vet",
-	Doc:      "report entity field accesses that are not preceded by " + brand.Name + ".Touch (lazy loading would read zero values)",
+	Doc:      "report entity field accesses that are not preceded by " + brand.Name + ".Touch (lazy loading would read zero values) and unknown field names in queries",
 	Requires: []*analysis.Analyzer{inspect.Analyzer},
 	Run:      run,
 }
@@ -113,12 +114,19 @@ func generated(f *ast.File) bool { return ast.IsGenerated(f) }
 
 func run(pass *analysis.Pass) (any, error) {
 	ins := pass.ResultOf[inspect.Analyzer].(*inspector.Inspector)
-	files := map[*token.File]bool{}
+	files, gen := map[*token.File]bool{}, map[*token.File]bool{}
 	for _, f := range pass.Files {
-		if generated(f) || strings.HasSuffix(pass.Fset.File(f.Pos()).Name(), "_test.go") {
-			files[pass.Fset.File(f.Pos())] = true
+		tf := pass.Fset.File(f.Pos())
+		gen[tf] = generated(f)
+		if generated(f) || strings.HasSuffix(tf.Name(), "_test.go") {
+			files[tf] = true
 		}
 	}
+	ins.Preorder([]ast.Node{(*ast.CallExpr)(nil)}, func(n ast.Node) {
+		if !gen[pass.Fset.File(n.Pos())] {
+			checkFieldNames(pass, n.(*ast.CallExpr))
+		}
+	})
 	ins.Preorder([]ast.Node{(*ast.FuncDecl)(nil), (*ast.FuncLit)(nil)}, func(n ast.Node) {
 		if files[pass.Fset.File(n.Pos())] {
 			return
