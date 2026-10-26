@@ -32,7 +32,9 @@ type Query struct {
 	aliases map[string]*mapping.Entity
 	without map[string]bool // filters disabled for this query
 	// columns and groupBy are SQL templates of a projection (Columns).
-	columns, groupBy []string
+	columns []rawCond
+	groupBy []string
+	root    string // alias of the queried entity (RootAlias, As)
 }
 
 // queryJoin joins an association (assoc) or an entity on a condition (on).
@@ -58,7 +60,29 @@ func (em *EntityManager) NewQuery(t reflect.Type) *Query {
 		return q
 	}
 	q.meta = meta
+	q.root = RootAlias
 	q.aliases[RootAlias] = meta
+	return q
+}
+
+// As names the queried entity alias instead of "t0", so a sub query can
+// refer to the query around it, e.g. Raw("{User} = w.user_id") inside a
+// query As("w").
+func (q *Query) As(alias string) *Query {
+	if q.err != nil {
+		return q
+	}
+	if _, dup := q.aliases[alias]; dup || alias == "" {
+		return q.fail(fmt.Errorf("query: alias %q is empty or already used", alias))
+	}
+	q.aliases[alias] = q.meta
+	delete(q.aliases, q.root)
+	for i := range q.joins {
+		if q.joins[i].from == q.root {
+			q.joins[i].from = alias
+		}
+	}
+	q.root = alias
 	return q
 }
 
@@ -87,7 +111,7 @@ func (q *Query) join(ref any, alias string, left bool) *Query {
 	var from, name, path string
 	switch r := ref.(type) {
 	case string:
-		from, name, path = RootAlias, r, r
+		from, name, path = q.root, r, r
 		if i := strings.IndexByte(r, '.'); i >= 0 {
 			from, name = r[:i], r[i+1:]
 		}
@@ -147,7 +171,19 @@ func (q *Query) joinOn(t reflect.Type, alias string, on Cond, left bool) *Query 
 // Columns selects SQL expressions instead of entities, with {Field} or
 // {alias.Field} for columns, e.g. Columns("{ID} AS id", "count({c.ID}) AS
 // n"); use the query through Sub or Rows.
-func (q *Query) Columns(exprs ...string) *Query { q.columns = append(q.columns, exprs...); return q }
+func (q *Query) Columns(exprs ...string) *Query {
+	for _, e := range exprs {
+		q.columns = append(q.columns, rawCond{sql: e})
+	}
+	return q
+}
+
+// Column selects one SQL expression with ? arguments, e.g.
+// Column("? AS kind", "forum").
+func (q *Query) Column(sql string, args ...any) *Query {
+	q.columns = append(q.columns, rawCond{sql, args})
+	return q
+}
 
 // GroupBy groups a projection (Columns) by SQL expressions, e.g. "{ID}".
 func (q *Query) GroupBy(exprs ...string) *Query { q.groupBy = append(q.groupBy, exprs...); return q }
@@ -236,7 +272,7 @@ func (q *Query) Clone() *Query {
 	c.where = append([]Cond(nil), q.where...)
 	c.order = append([]queryOrder(nil), q.order...)
 	c.with = append([]string(nil), q.with...)
-	c.columns = append([]string(nil), q.columns...)
+	c.columns = append([]rawCond(nil), q.columns...)
 	c.groupBy = append([]string(nil), q.groupBy...)
 	c.without = make(map[string]bool, len(q.without))
 	for k, v := range q.without {
@@ -263,7 +299,7 @@ func (q *Query) resolve(ref any) (string, *mapping.Field, error) {
 	var alias, name string
 	switch r := ref.(type) {
 	case string:
-		alias, name = RootAlias, r
+		alias, name = q.root, r
 		// "alias.Field" or a path into an embeddable ("Billing.City").
 		if i := strings.IndexByte(r, '.'); i >= 0 {
 			if _, ok := q.aliases[r[:i]]; ok {
@@ -307,7 +343,7 @@ func (q *Query) aliasOf(r mapping.FieldRef) (string, error) {
 		if m.Name != r.Entity {
 			continue
 		}
-		if a == RootAlias {
+		if a == q.root {
 			return a, nil
 		}
 		if alias != "" {
@@ -333,7 +369,7 @@ func (q *Query) buildMode(count, refs bool) (*dbal.SelectQuery, error) {
 	em, meta := q.em, q.meta
 	wrap := q.hasToManyJoin() && meta.SingleID() != nil
 	inner := em.db.NewSelect()
-	em.fromEntity(inner, meta, RootAlias)
+	em.fromEntity(inner, meta, q.root)
 	for _, j := range q.joins {
 		if err := q.appendJoin(inner, j); err != nil {
 			return nil, err
@@ -346,12 +382,12 @@ func (q *Query) buildMode(count, refs bool) (*dbal.SelectQuery, error) {
 		}
 		inner.WhereExpr(e)
 	}
-	for _, c := range append(em.filterCondsExcept(meta, RootAlias, q.without), classConds(meta, RootAlias, !meta.IsPolymorphic())...) {
+	for _, c := range append(em.filterCondsExcept(meta, q.root, q.without), classConds(meta, q.root, !meta.IsPolymorphic())...) {
 		inner.WhereExpr(c)
 	}
 	idCol := ""
 	if id := meta.SingleID(); id != nil {
-		idCol = RootAlias + "." + id.Column
+		idCol = q.root + "." + id.Column
 	}
 	if len(q.columns) > 0 && !count {
 		return q.projection(inner)
@@ -371,16 +407,16 @@ func (q *Query) buildMode(count, refs bool) (*dbal.SelectQuery, error) {
 	switch {
 	case wrap && refs:
 		inner.Column(idCol)
-		out = em.db.NewSelect().Column(idCol, RootAlias+"."+meta.DiscriminatorColumn)
-		em.fromEntity(out, meta, RootAlias)
+		out = em.db.NewSelect().Column(idCol, q.root+"."+meta.DiscriminatorColumn)
+		em.fromEntity(out, meta, q.root)
 		out.Where("? IN ?", dbal.Ident(idCol), inner)
 	case wrap:
 		inner.Column(idCol)
-		out = em.selectEntity(meta, RootAlias).Where("? IN ?", dbal.Ident(idCol), inner)
+		out = em.selectEntity(meta, q.root).Where("? IN ?", dbal.Ident(idCol), inner)
 	case refs:
-		out = inner.Column(idCol, RootAlias+"."+meta.DiscriminatorColumn)
+		out = inner.Column(idCol, q.root+"."+meta.DiscriminatorColumn)
 	default:
-		out = inner.ColumnExprs(entityColumns(meta, RootAlias)...)
+		out = inner.ColumnExprs(entityColumns(meta, q.root)...)
 		if q.hasToManyJoin() {
 			out.Distinct()
 		}
@@ -402,7 +438,7 @@ func (q *Query) buildMode(count, refs bool) (*dbal.SelectQuery, error) {
 		if err != nil {
 			return nil, err
 		}
-		if wrap && !strings.HasPrefix(col, RootAlias+".") {
+		if wrap && !strings.HasPrefix(col, q.root+".") {
 			return nil, fmt.Errorf("query: ordering by %v is not possible together with collection joins", o.field)
 		}
 		out.OrderBy(col, o.dir)
@@ -416,20 +452,19 @@ func (q *Query) buildMode(count, refs bool) (*dbal.SelectQuery, error) {
 
 // projection finishes inner as a selection of Columns.
 func (q *Query) projection(out *dbal.SelectQuery) (*dbal.SelectQuery, error) {
-	for _, list := range []struct {
-		exprs []string
-		add   func(dbal.Expr)
-	}{
-		{q.columns, func(e dbal.Expr) { out.ColumnExprs(e) }},
-		{q.groupBy, func(e dbal.Expr) { out.GroupByExpr("?", e) }},
-	} {
-		for _, c := range list.exprs {
-			e, err := q.template(c)
-			if err != nil {
-				return nil, err
-			}
-			list.add(e)
+	for _, c := range q.columns {
+		e, err := c.build(q)
+		if err != nil {
+			return nil, err
 		}
+		out.ColumnExprs(e)
+	}
+	for _, g := range q.groupBy {
+		e, err := q.template(g)
+		if err != nil {
+			return nil, err
+		}
+		out.GroupByExpr("?", e)
 	}
 	for _, o := range q.order {
 		var e dbal.Expr
@@ -608,7 +643,7 @@ func (q *Query) addFetchJoins(s *dbal.SelectQuery, joins []*mapping.Association)
 		alias := fetchAlias(i)
 		jc := a.JoinColumns[0]
 		s.Join("LEFT JOIN ? AS ? ON ? = ?", q.em.source(a.Target), dbal.Ident(alias),
-			dbal.Ident(alias+"."+jc.Referenced), dbal.Ident(RootAlias+"."+jc.Name))
+			dbal.Ident(alias+"."+jc.Referenced), dbal.Ident(q.root+"."+jc.Name))
 		s.ColumnExprs(entityColumns(a.Target, alias)...)
 	}
 }

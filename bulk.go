@@ -49,3 +49,58 @@ func (q *UpdateQuery[T]) SQL() (string, []any, error) { return q.u.SQL() }
 
 // Exec runs the update and returns the number of changed rows.
 func (q *UpdateQuery[T]) Exec(ctx context.Context) (int, error) { return q.u.Exec(ctx) }
+
+// InsertQuery adds many rows of T in one statement (see Insert).
+type InsertQuery[T any] struct{ i *orm.Insert }
+
+// Selection is a query whose rows Insert.Select inserts: a Query of any
+// type with Columns.
+type Selection interface{ ormQuery() *orm.Query }
+
+// Insert starts a bulk insert of T (alias "t0"): entities (Rows) or the
+// rows of a query (Select), optionally an upsert, e.g.
+//
+//	smorm.Insert[Read](em).Rows(r).OnConflict("User", "Thread").Set("ReadAt", smorm.Raw("GREATEST({ReadAt}, {excluded.ReadAt})")).Exec(ctx)
+//
+// It bypasses the unit of work: the entities are not managed afterwards and
+// hooks do not run; IDs and timestamps are assigned as on a flush.
+// Listeners get EventPostBulk with the IDs written. Postgres and SQLite only.
+func Insert[T any](em *EntityManager) *InsertQuery[T] {
+	return &InsertQuery[T]{i: em.NewInsert(reflect.TypeFor[T]())}
+}
+
+// Rows adds entities as rows.
+func (q *InsertQuery[T]) Rows(entities ...*T) *InsertQuery[T] {
+	for _, e := range entities {
+		q.i.Rows(e)
+	}
+	return q
+}
+
+// Select inserts the rows of a query with Columns into fields, in order.
+func (q *InsertQuery[T]) Select(src Selection, fields ...string) *InsertQuery[T] {
+	q.i.Select(src.ormQuery(), fields...)
+	return q
+}
+
+// OnConflict names the fields of the unique key a row may collide with.
+func (q *InsertQuery[T]) OnConflict(fields ...string) *InsertQuery[T] {
+	q.i.OnConflict(fields...)
+	return q
+}
+
+// DoNothing keeps the existing row on a conflict.
+func (q *InsertQuery[T]) DoNothing() *InsertQuery[T] { q.i.DoNothing(); return q }
+
+// Set updates field of the existing row on a conflict; {excluded.Field} is
+// the value proposed.
+func (q *InsertQuery[T]) Set(field string, value any) *InsertQuery[T] {
+	q.i.Set(field, value)
+	return q
+}
+
+// SQL renders the insert for debugging.
+func (q *InsertQuery[T]) SQL() (string, []any, error) { return q.i.SQL() }
+
+// Exec runs the insert and returns the number of rows written.
+func (q *InsertQuery[T]) Exec(ctx context.Context) (int, error) { return q.i.Exec(ctx) }

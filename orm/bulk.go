@@ -2,6 +2,7 @@ package orm
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
 	"reflect"
@@ -74,7 +75,7 @@ func (u *Update) build() (*dbal.UpdateQuery, error) {
 		return nil, errors.New("update: nothing to set")
 	}
 	meta := q.meta
-	out := q.em.db.NewUpdate().TableAs(meta.Table, RootAlias)
+	out := q.em.db.NewUpdate().TableAs(meta.Table, q.root)
 	for _, s := range u.sets {
 		_, f, err := q.resolve(s.field)
 		if err != nil {
@@ -103,11 +104,11 @@ func (u *Update) build() (*dbal.UpdateQuery, error) {
 		return nil, err
 	}
 	out.WhereExpr(where)
-	for _, c := range append(q.em.filterCondsExcept(meta, RootAlias, q.without), classConds(meta, RootAlias, !meta.IsPolymorphic())...) {
+	for _, c := range append(q.em.filterCondsExcept(meta, q.root, q.without), classConds(meta, q.root, !meta.IsPolymorphic())...) {
 		out.WhereExpr(c)
 	}
 	if id := u.returning(); id != nil {
-		col := RootAlias + "." + id.Column
+		col := q.root + "." + id.Column
 		if q.em.db.Dialect().Name() == dialect.SQLite { // RETURNING knows no aliases
 			col = id.Column
 		}
@@ -162,19 +163,25 @@ func (u *Update) Exec(ctx context.Context) (int, error) {
 	if err != nil {
 		return 0, err
 	}
+	ids, err := scanIDs(rows, id, em.db.Dialect().Name())
+	if err != nil {
+		return 0, err
+	}
+	return len(ids), em.bulk(ctx, &EventArgs{EM: em, Meta: meta, IDs: ids})
+}
+
+// scanIDs reads the identifiers a statement returned and closes rows.
+func scanIDs(rows *sql.Rows, id *mapping.Field, d dialect.Name) ([]any, error) {
 	defer rows.Close()
 	var ids []any
 	for rows.Next() {
 		v := reflect.New(id.GoType)
-		if err := rows.Scan(id.Type.ScanTarget(v.Interface(), em.db.Dialect().Name())); err != nil {
-			return 0, err
+		if err := rows.Scan(id.Type.ScanTarget(v.Interface(), d)); err != nil {
+			return nil, err
 		}
 		ids = append(ids, v.Elem().Interface())
 	}
-	if err := rows.Err(); err != nil {
-		return 0, err
-	}
-	return len(ids), em.bulk(ctx, &EventArgs{EM: em, Meta: meta, IDs: ids})
+	return ids, rows.Err()
 }
 
 // bulk dispatches EventPostBulk now, or after the commit of the running
@@ -185,4 +192,230 @@ func (em *EntityManager) bulk(ctx context.Context, args *EventArgs) error {
 		return nil
 	}
 	return em.events.dispatch(ctx, EventPostBulk, args)
+}
+
+// Insert adds many rows of an entity type in one statement: entities
+// (Rows) or the rows of a query (Select), optionally as an upsert
+// (OnConflict). Like Update it bypasses the unit of work: the entities
+// are not managed afterwards and lifecycle hooks do not run; identifiers
+// and timestamps are assigned as on a flush. Listeners get EventPostBulk
+// with the IDs of the rows written. Postgres and SQLite only. Build it with
+// EntityManager.NewInsert.
+type Insert struct {
+	q         *Query
+	rows      []any
+	sel       *Query
+	selFields []string
+	target    []string
+	nothing   bool
+	sets      []bulkSet
+}
+
+// excludedAlias names the row proposed for insertion in OnConflict
+// updates: {excluded.Field}.
+const excludedAlias = "excluded"
+
+// NewInsert starts a bulk insert of the entity type t (alias "t0").
+func (em *EntityManager) NewInsert(t reflect.Type) *Insert {
+	q := em.NewQuery(t)
+	if q.err == nil {
+		if q.meta.Inheritance == mapping.Joined {
+			q.fail(fmt.Errorf("insert: %s uses joined inheritance", q.meta.Name))
+		}
+		q.aliases[excludedAlias] = q.meta
+	}
+	return &Insert{q: q}
+}
+
+// Rows adds entities (pointers) as rows.
+func (i *Insert) Rows(entities ...any) *Insert { i.rows = append(i.rows, entities...); return i }
+
+// Select inserts the rows of a projection (Query.Columns) into fields, in
+// order (INSERT … SELECT).
+func (i *Insert) Select(q *Query, fields ...string) *Insert {
+	i.sel, i.selFields = q, fields
+	return i
+}
+
+// OnConflict names the fields of the unique key a row may collide with;
+// DoNothing or Set decides what happens then.
+func (i *Insert) OnConflict(fields ...string) *Insert { i.target = fields; return i }
+
+// DoNothing keeps the existing row on a conflict.
+func (i *Insert) DoNothing() *Insert { i.nothing = true; return i }
+
+// Set updates field of the existing row on a conflict: a Go value or an
+// expression, e.g. Raw("GREATEST({ReadAt}, {excluded.ReadAt})").
+func (i *Insert) Set(field string, value any) *Insert {
+	i.sets = append(i.sets, bulkSet{field, value})
+	return i
+}
+
+func (i *Insert) build() (*dbal.InsertQuery, error) {
+	q := i.q
+	if q.err != nil {
+		return nil, q.err
+	}
+	em, meta := q.em, q.meta
+	if d := em.db.Dialect().Name(); d != dialect.Postgres && d != dialect.SQLite {
+		return nil, fmt.Errorf("insert: not supported by %s", d)
+	}
+	out := em.db.NewInsert().TableAs(meta.Table, q.root)
+	switch {
+	case len(i.rows) > 0 && i.sel != nil:
+		return nil, errors.New("insert: rows and a select at once")
+	case i.sel != nil:
+		cols := make([]string, len(i.selFields))
+		for n, name := range i.selFields {
+			_, f, err := q.resolve(name)
+			if err != nil {
+				return nil, err
+			}
+			cols[n] = f.Column
+		}
+		sel, err := i.sel.build(false)
+		if err != nil {
+			return nil, err
+		}
+		out.Columns(cols...).Select(sel)
+	case len(i.rows) > 0:
+		if err := i.values(out); err != nil {
+			return nil, err
+		}
+	default:
+		return nil, errors.New("insert: no rows")
+	}
+	if len(i.target) > 0 {
+		cols := make([]string, len(i.target))
+		for n, name := range i.target {
+			_, f, err := q.resolve(name)
+			if err != nil {
+				return nil, err
+			}
+			cols[n] = f.Column
+		}
+		out.OnConflict(cols...)
+		if i.nothing {
+			out.DoNothing()
+		}
+		for _, s := range i.sets {
+			_, f, err := q.resolve(s.field)
+			if err != nil {
+				return nil, err
+			}
+			v, err := i.value(f, s.value)
+			if err != nil {
+				return nil, err
+			}
+			out.DoUpdateSet(f.Column, "?", v)
+		}
+	}
+	if id := meta.SingleID(); id != nil {
+		col := q.root + "." + id.Column
+		if em.db.Dialect().Name() == dialect.SQLite {
+			col = id.Column
+		}
+		out.Returning(col)
+	}
+	return out, nil
+}
+
+// values adds the rows of the entities to out.
+func (i *Insert) values(out *dbal.InsertQuery) error {
+	em, meta := i.q.em, i.q.meta
+	var fields []*mapping.Field
+	var cols []string
+	for _, f := range meta.Fields {
+		if f.Generated || f.ID && meta.Generator == mapping.GenIdentity {
+			continue
+		}
+		fields = append(fields, f)
+		cols = append(cols, f.Column)
+	}
+	if meta.Inheritance != "" {
+		cols = append(cols, meta.DiscriminatorColumn)
+	}
+	out.Columns(cols...)
+	now := em.now()
+	for _, ptr := range i.rows {
+		if reflect.TypeOf(ptr) != reflect.PointerTo(meta.GoType) {
+			return fmt.Errorf("insert: %s expects *%s, got %T", meta.Name, meta.Name, ptr)
+		}
+		if err := assignPreInsertID(meta, ptr); err != nil {
+			return err
+		}
+		if t, ok := ptr.(mapping.CreatedToucher); ok {
+			t.TouchCreated(now)
+		}
+		e := &entry{meta: meta, ptr: ptr}
+		vals := make([]any, 0, len(cols))
+		for _, f := range fields {
+			v, err := em.fieldDBValue(e, f)
+			if err != nil {
+				return fmt.Errorf("%s.%s: %w", meta.Name, f.Column, err)
+			}
+			vals = append(vals, v)
+		}
+		if meta.Inheritance != "" {
+			vals = append(vals, meta.DiscriminatorValue)
+		}
+		out.Values(vals...)
+	}
+	return nil
+}
+
+// value renders the value of a conflict update.
+func (i *Insert) value(f *mapping.Field, value any) (any, error) {
+	switch e := value.(type) {
+	case Cond:
+		return e.build(i.q)
+	case dbal.Expr:
+		return e, nil
+	default:
+		return i.q.value(f, value)
+	}
+}
+
+// SQL renders the insert for debugging.
+func (i *Insert) SQL() (string, []any, error) {
+	s, err := i.build()
+	if err != nil {
+		return "", nil, err
+	}
+	return s.Build()
+}
+
+// Exec runs the insert and returns the number of rows written (inserted,
+// or updated on a conflict).
+func (i *Insert) Exec(ctx context.Context) (int, error) {
+	em := i.q.em
+	if em.closed {
+		return 0, ErrClosed
+	}
+	s, err := i.build()
+	if err != nil {
+		return 0, err
+	}
+	meta := i.q.meta
+	id := meta.SingleID()
+	if id == nil {
+		res, err := s.Exec(ctx)
+		if err != nil {
+			return 0, err
+		}
+		n, err := res.RowsAffected()
+		if err != nil {
+			return 0, err
+		}
+		return int(n), em.bulk(ctx, &EventArgs{EM: em, Meta: meta})
+	}
+	rows, err := s.Rows(ctx)
+	if err != nil {
+		return 0, err
+	}
+	ids, err := scanIDs(rows, id, em.db.Dialect().Name())
+	if err != nil {
+		return 0, err
+	}
+	return len(ids), em.bulk(ctx, &EventArgs{EM: em, Meta: meta, IDs: ids})
 }

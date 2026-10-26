@@ -67,8 +67,13 @@ See [examples/blog](examples/blog) for a complete project generated this way.
   a slice after `IN` is expanded, anywhere else (`= ANY(?)`) it is one array parameter.
 - **Projections and bulk writes** keep field names where a query is more than "load
   entities": `JoinOn`/`LeftJoinOn` join an entity on a condition, `Columns` and `GroupBy`
-  select expressions, `Sub()` uses a query as a sub query, and `smorm.Update[T]` changes
-  many rows in one statement (listeners get `EventPostBulk` with their IDs after the commit).
+  select expressions (`Column` with arguments), `Sub()` uses a query as a sub query (`As`
+  names its alias, so a sub query inside can refer to it as plain SQL, `a.name`),
+  `smorm.Update[T]` changes and `smorm.Insert[T]` adds many rows in one statement (entities,
+  `INSERT … SELECT`, upserts with `OnConflict` and `{excluded.Field}`); listeners get
+  `EventPostBulk` with the IDs of the rows after the commit. Bulk writes bypass the unit of
+  work: no hooks, loaded entities keep their values, IDs the database generates are not set on
+  inserted entities.
   Some of these only run on the databases listed under
   [Database specific features](#database-specific-features).
 - **Migrations**: versioned Go or SQL files, `make:migration` diffs entities against the database.
@@ -81,6 +86,7 @@ they write; on any other, building the statement fails with an error (no SQL is 
 | Feature | Postgres | SQLite | MySQL / MariaDB | SQL Server |
 |---|---|---|---|---|
 | `UpdateQuery.From` (`UPDATE … FROM`) | yes | yes | no | no |
+| `smorm.Insert[T]` (bulk inserts, upserts) | yes | yes | no | no |
 | IDs in `EventPostBulk` (`RETURNING`) | yes | yes | nil (any row may have changed) | nil |
 
 Identifiers, the order of events within `Flush`, transactions, listeners

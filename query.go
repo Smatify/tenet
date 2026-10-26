@@ -80,8 +80,19 @@ func entityType(v any) reflect.Type {
 // Use such a query through Sub.
 func (q *Query[T]) Columns(exprs ...string) *Query[T] { q.q.Columns(exprs...); return q }
 
+// Column selects one SQL expression with ? arguments, e.g.
+// Column("? AS kind", "forum").
+func (q *Query[T]) Column(sql string, args ...any) *Query[T] { q.q.Column(sql, args...); return q }
+
+// As names the queried entity alias instead of "t0", so a sub query can
+// refer to the query around it.
+func (q *Query[T]) As(alias string) *Query[T] { q.q.As(alias); return q }
+
 // GroupBy groups a projection by SQL expressions, e.g. "{ID}".
 func (q *Query[T]) GroupBy(exprs ...string) *Query[T] { q.q.GroupBy(exprs...); return q }
+
+// ormQuery makes queries of any type a source of Insert.Select.
+func (q *Query[T]) ormQuery() *orm.Query { return q.q }
 
 // Sub returns the query as a sub query for a FROM (Update.From), a join,
 // Raw("{ID} IN ?", q.Sub()) or Raw("EXISTS ?", q.Sub()).

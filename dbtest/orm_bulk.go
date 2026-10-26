@@ -106,3 +106,62 @@ func testORMBulkUpdate(t *testing.T, db *dbal.DB) {
 		t.Fatalf("rolled back: %d events, score %d", len(bulk), scores()["cid"])
 	}
 }
+
+func init() { Register(Case{"ORM/BulkInsert", testORMBulkInsert}) }
+
+func testORMBulkInsert(t *testing.T, db *dbal.DB) {
+	ctx := context.Background()
+	newEM := setupORM(t, db)
+	em := newEM()
+	var events int
+	em.Events().On(func(context.Context, *smorm.EventArgs) error { events++; return nil }, smorm.EventPostBulk)
+	if d := db.Dialect().Name(); d != dialect.Postgres && d != dialect.SQLite {
+		if _, err := smorm.Insert[ormAuthor](em).Rows(&ormAuthor{name: "ann"}).Exec(ctx); err == nil {
+			t.Fatal("bulk inserts must fail on " + string(d))
+		}
+		return
+	}
+	n, err := smorm.Insert[ormAuthor](em).Rows(&ormAuthor{name: "ann", score: 1}, &ormAuthor{name: "bob", score: 2}).Exec(ctx)
+	must(t, err)
+	if n != 2 || events != 1 {
+		t.Fatalf("inserted %d rows, %d events", n, events)
+	}
+	scores := func() map[string]int {
+		out := map[string]int{}
+		all, err := smorm.NewQuery[ormAuthor](newEM()).All(ctx)
+		must(t, err)
+		for _, a := range all {
+			out[a.name] = a.score
+			if a.CreatedAt().IsZero() {
+				t.Errorf("%s without created_at", a.name)
+			}
+		}
+		return out
+	}
+	// An upsert adds the proposed score to the existing one.
+	n, err = smorm.Insert[ormAuthor](em).Rows(&ormAuthor{name: "ann", score: 10}, &ormAuthor{name: "cid", score: 3}).
+		OnConflict("name").Set("score", smorm.Raw("COALESCE({score}, 0) + COALESCE({excluded.score}, 0)")).Exec(ctx)
+	must(t, err)
+	if got := scores(); n != 2 || got["ann"] != 11 || got["bob"] != 2 || got["cid"] != 3 {
+		t.Fatalf("upsert of %d rows: %v", n, got)
+	}
+	n, err = smorm.Insert[ormAuthor](em).Rows(&ormAuthor{name: "bob", score: 9}).OnConflict("name").DoNothing().Exec(ctx)
+	must(t, err)
+	if got := scores(); n != 0 || got["bob"] != 2 {
+		t.Fatalf("do nothing wrote %d rows: %v", n, got)
+	}
+
+	// INSERT … SELECT: a category per author, not twice (NOT EXISTS of the
+	// sub query refers to the outer query by its alias).
+	missing := func() *smorm.Query[ormAuthor] {
+		has := smorm.NewQuery[ormCategory](em).Column("1").Where(smorm.Raw("{Name} = a.name"))
+		return smorm.NewQuery[ormAuthor](em).As("a").Columns("{a.name}").Where(smorm.Raw("NOT EXISTS ?", has.Sub()))
+	}
+	for run, want := range []int{3, 0} {
+		n, err = smorm.Insert[ormCategory](em).Select(missing(), "Name").Exec(ctx)
+		must(t, err)
+		if n != want {
+			t.Fatalf("run %d inserted %d categories, want %d", run, n, want)
+		}
+	}
+}

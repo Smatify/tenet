@@ -119,6 +119,13 @@ func (q *InsertQuery) With(name string, query Expr) *InsertQuery {
 // Table sets the target table.
 func (q *InsertQuery) Table(name string) *InsertQuery { q.table = tableRef{name: name}; return q }
 
+// TableAs sets the target table with alias, so an ON CONFLICT update can
+// refer to the existing row (Postgres and SQLite).
+func (q *InsertQuery) TableAs(name, alias string) *InsertQuery {
+	q.table = tableRef{name: name, alias: alias}
+	return q
+}
+
 // Columns sets the inserted columns.
 func (q *InsertQuery) Columns(cols ...string) *InsertQuery { q.columns = cols; return q }
 
