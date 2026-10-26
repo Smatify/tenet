@@ -31,12 +31,17 @@ type Query struct {
 	err     error
 	aliases map[string]*mapping.Entity
 	without map[string]bool // filters disabled for this query
+	// columns and groupBy are SQL templates of a projection (Columns).
+	columns, groupBy []string
 }
 
+// queryJoin joins an association (assoc) or an entity on a condition (on).
 type queryJoin struct {
 	from, path, alias string
 	left              bool
 	assoc             *mapping.Association
+	target            *mapping.Entity
+	on                Cond
 }
 
 type queryOrder struct {
@@ -111,6 +116,63 @@ func (q *Query) join(ref any, alias string, left bool) *Query {
 	return q
 }
 
+// JoinOn adds an INNER JOIN of the entity type t as alias on a condition,
+// e.g. JoinOn(commentType, "c", Raw("{c.ObjectID} = {ID}")); the filters
+// of t become part of the ON clause.
+func (q *Query) JoinOn(t reflect.Type, alias string, on Cond) *Query {
+	return q.joinOn(t, alias, on, false)
+}
+
+// LeftJoinOn adds a LEFT JOIN of the entity type t as alias on a condition.
+func (q *Query) LeftJoinOn(t reflect.Type, alias string, on Cond) *Query {
+	return q.joinOn(t, alias, on, true)
+}
+
+func (q *Query) joinOn(t reflect.Type, alias string, on Cond, left bool) *Query {
+	if q.err != nil {
+		return q
+	}
+	meta, err := q.em.reg.Get(t)
+	if err != nil {
+		return q.fail(err)
+	}
+	if _, dup := q.aliases[alias]; dup || alias == "" {
+		return q.fail(fmt.Errorf("query: alias %q is empty or already used", alias))
+	}
+	q.aliases[alias] = meta
+	q.joins = append(q.joins, queryJoin{alias: alias, left: left, target: meta, on: on})
+	return q
+}
+
+// Columns selects SQL expressions instead of entities, with {Field} or
+// {alias.Field} for columns, e.g. Columns("{ID} AS id", "count({c.ID}) AS
+// n"); use the query through Sub or Rows.
+func (q *Query) Columns(exprs ...string) *Query { q.columns = append(q.columns, exprs...); return q }
+
+// GroupBy groups a projection (Columns) by SQL expressions, e.g. "{ID}".
+func (q *Query) GroupBy(exprs ...string) *Query { q.groupBy = append(q.groupBy, exprs...); return q }
+
+// Sub returns the query as a parenthesized sub query, for a FROM, a join,
+// "IN ?" or "EXISTS ?"; an error of the query shows when it is rendered.
+func (q *Query) Sub() dbal.Expr {
+	return subQuery{q}
+}
+
+type subQuery struct{ q *Query }
+
+func (s subQuery) AppendSQL(w *dbal.SQLWriter) error {
+	sel, err := s.q.build(false)
+	if err != nil {
+		return err
+	}
+	return sel.AppendSQL(w)
+}
+
+// template renders a SQL template with {Field} placeholders.
+func (q *Query) template(sql string, args ...any) (dbal.Expr, error) {
+	return rawCond{sql, args}.build(q)
+}
+
 // Where adds conditions joined with AND.
 func (q *Query) Where(conds ...Cond) *Query { q.where = append(q.where, conds...); return q }
 
@@ -174,6 +236,8 @@ func (q *Query) Clone() *Query {
 	c.where = append([]Cond(nil), q.where...)
 	c.order = append([]queryOrder(nil), q.order...)
 	c.with = append([]string(nil), q.with...)
+	c.columns = append([]string(nil), q.columns...)
+	c.groupBy = append([]string(nil), q.groupBy...)
 	c.without = make(map[string]bool, len(q.without))
 	for k, v := range q.without {
 		c.without[k] = v
@@ -187,7 +251,7 @@ func (q *Query) Clone() *Query {
 
 func (q *Query) hasToManyJoin() bool {
 	for _, j := range q.joins {
-		if !j.assoc.Kind.IsToOne() {
+		if j.assoc == nil || !j.assoc.Kind.IsToOne() {
 			return true
 		}
 	}
@@ -289,6 +353,9 @@ func (q *Query) buildMode(count, refs bool) (*dbal.SelectQuery, error) {
 	if id := meta.SingleID(); id != nil {
 		idCol = RootAlias + "." + id.Column
 	}
+	if len(q.columns) > 0 && !count {
+		return q.projection(inner)
+	}
 	if count {
 		switch {
 		case wrap:
@@ -347,7 +414,49 @@ func (q *Query) buildMode(count, refs bool) (*dbal.SelectQuery, error) {
 	return out, nil
 }
 
+// projection finishes inner as a selection of Columns.
+func (q *Query) projection(out *dbal.SelectQuery) (*dbal.SelectQuery, error) {
+	for _, list := range []struct {
+		exprs []string
+		add   func(dbal.Expr)
+	}{
+		{q.columns, func(e dbal.Expr) { out.ColumnExprs(e) }},
+		{q.groupBy, func(e dbal.Expr) { out.GroupByExpr("?", e) }},
+	} {
+		for _, c := range list.exprs {
+			e, err := q.template(c)
+			if err != nil {
+				return nil, err
+			}
+			list.add(e)
+		}
+	}
+	for _, o := range q.order {
+		var e dbal.Expr
+		var err error
+		if r, ok := o.field.(rawCond); ok {
+			e, err = r.build(q)
+		} else {
+			var col string
+			col, _, err = q.resolve(o.field)
+			e = dbal.Ident(col)
+		}
+		if err != nil {
+			return nil, err
+		}
+		dir := o.dir
+		if dir != dbal.Desc {
+			dir = dbal.Asc
+		}
+		out.OrderExpr("? "+string(dir), e)
+	}
+	return out.Limit(q.limit).Offset(q.offset), nil
+}
+
 func (q *Query) appendJoin(s *dbal.SelectQuery, j queryJoin) error {
+	if j.on != nil {
+		return q.appendJoinOn(s, j)
+	}
 	a := j.assoc
 	join := s.InnerJoin
 	if j.left {
@@ -386,6 +495,26 @@ func (q *Query) appendJoin(s *dbal.SelectQuery, j queryJoin) error {
 		join(spec.table, jt, "? = ?", col(jt, spec.ownerCol), col(j.from, spec.ownerRef.Column))
 		target(col(j.alias, spec.targetRef.Column), col(jt, spec.targetCol))
 	}
+	return nil
+}
+
+// appendJoinOn joins an entity on a condition; its filters join the ON
+// clause, so LEFT JOINs keep their semantics.
+func (q *Query) appendJoinOn(s *dbal.SelectQuery, j queryJoin) error {
+	on, err := j.on.build(q)
+	if err != nil {
+		return err
+	}
+	tmpl, args := "? AS ? ON ?", []any{q.em.source(j.target), dbal.Ident(j.alias), on}
+	for _, c := range append(q.em.filterCondsExcept(j.target, j.alias, q.without), classConds(j.target, j.alias, false)...) {
+		tmpl += " AND ?"
+		args = append(args, c)
+	}
+	kind := "INNER JOIN "
+	if j.left {
+		kind = "LEFT JOIN "
+	}
+	s.Join(kind+tmpl, args...)
 	return nil
 }
 

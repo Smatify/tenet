@@ -53,6 +53,40 @@ func (q *Query[T]) Join(path any, alias string) *Query[T] { q.q.Join(path, alias
 // LeftJoin adds a LEFT JOIN over an association.
 func (q *Query[T]) LeftJoin(path any, alias string) *Query[T] { q.q.LeftJoin(path, alias); return q }
 
+// JoinOn adds an INNER JOIN of the entity type of target (a value or
+// pointer, e.g. Comment{}) as alias on a condition:
+// JoinOn(Comment{}, "c", Raw("{c.ObjectID} = {ID}")).
+func (q *Query[T]) JoinOn(target any, alias string, on Cond) *Query[T] {
+	q.q.JoinOn(entityType(target), alias, on)
+	return q
+}
+
+// LeftJoinOn adds a LEFT JOIN of the entity type of target on a condition.
+func (q *Query[T]) LeftJoinOn(target any, alias string, on Cond) *Query[T] {
+	q.q.LeftJoinOn(entityType(target), alias, on)
+	return q
+}
+
+func entityType(v any) reflect.Type {
+	t := reflect.TypeOf(v)
+	for t != nil && t.Kind() == reflect.Pointer {
+		t = t.Elem()
+	}
+	return t
+}
+
+// Columns selects SQL expressions instead of entities, with {Field} or
+// {alias.Field} for columns: Columns("{ID} AS id", "count({c.ID}) AS n").
+// Use such a query through Sub.
+func (q *Query[T]) Columns(exprs ...string) *Query[T] { q.q.Columns(exprs...); return q }
+
+// GroupBy groups a projection by SQL expressions, e.g. "{ID}".
+func (q *Query[T]) GroupBy(exprs ...string) *Query[T] { q.q.GroupBy(exprs...); return q }
+
+// Sub returns the query as a sub query for a FROM (Update.From), a join,
+// Raw("{ID} IN ?", q.Sub()) or Raw("EXISTS ?", q.Sub()).
+func (q *Query[T]) Sub() dbal.Expr { return q.q.Sub() }
+
 // Where adds conditions joined with AND.
 func (q *Query[T]) Where(conds ...Cond) *Query[T] { q.q.Where(conds...); return q }
 

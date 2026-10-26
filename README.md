@@ -65,7 +65,23 @@ See [examples/blog](examples/blog) for a complete project generated this way.
   entity does not have, and field accesses without `smorm.Touch`.
   `smorm.Raw("{title} ILIKE ? OR {id} IN ?", pattern, ids)` inserts columns for `{field}`;
   a slice after `IN` is expanded, anywhere else (`= ANY(?)`) it is one array parameter.
+- **Projections and bulk writes** keep field names where a query is more than "load
+  entities": `JoinOn`/`LeftJoinOn` join an entity on a condition, `Columns` and `GroupBy`
+  select expressions, `Sub()` uses a query as a sub query, and `smorm.Update[T]` changes
+  many rows in one statement (listeners get `EventPostBulk` with their IDs after the commit).
+  Some of these only run on the databases listed under
+  [Database specific features](#database-specific-features).
 - **Migrations**: versioned Go or SQL files, `make:migration` diffs entities against the database.
+
+### Database specific features
+
+Most of smorm runs on every dialect. These parts need a database that supports the SQL
+they write; on any other, building the statement fails with an error (no SQL is sent):
+
+| Feature | Postgres | SQLite | MySQL / MariaDB | SQL Server |
+|---|---|---|---|---|
+| `UpdateQuery.From` (`UPDATE … FROM`) | yes | yes | no | no |
+| IDs in `EventPostBulk` (`RETURNING`) | yes | yes | nil (any row may have changed) | nil |
 
 Identifiers, the order of events within `Flush`, transactions, listeners
 for committed changes and soft delete: [docs/lifecycle.md](docs/lifecycle.md).

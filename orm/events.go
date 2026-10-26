@@ -121,6 +121,11 @@ const (
 	// EventOnRollback follows a flush whose writes were rolled back (also
 	// by Transactional): listeners forget what they collected for args.EM.
 	EventOnRollback Event = "onRollback"
+	// EventPostBulk follows a bulk write (Update) once it is committed:
+	// Meta is the entity type, IDs the identifiers of the rows (nil when the
+	// type has no single identifier or the database returns no rows of an
+	// UPDATE, like MySQL and SQL Server: then any row may have changed).
+	EventPostBulk Event = "postBulk"
 )
 
 // EventArgs is passed to listeners. Entity, Meta and ChangeSet are empty for
@@ -130,6 +135,7 @@ type EventArgs struct {
 	Entity    any
 	Meta      *mapping.Entity
 	ChangeSet *ChangeSet
+	IDs       []any // EventPostBulk only
 }
 
 // Listener handles an event. Returning an error aborts the flush.

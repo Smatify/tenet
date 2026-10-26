@@ -410,6 +410,7 @@ type UpdateQuery struct {
 	writeQuery
 	sets    []setClause
 	raw     []Expr
+	from    []Expr
 	where   whereClause
 	allRows bool
 }
@@ -445,6 +446,13 @@ func (q *UpdateQuery) Set(col string, value any) *UpdateQuery {
 // SetExpr adds a raw assignment, e.g. SetExpr("hits = hits + ?", 1).
 func (q *UpdateQuery) SetExpr(query string, args ...any) *UpdateQuery {
 	q.raw = append(q.raw, SQL(query, args...))
+	return q
+}
+
+// From adds a source of the new values, e.g. From("? AS v", sub)
+// (UPDATE … FROM; Postgres and SQLite only).
+func (q *UpdateQuery) From(query string, args ...any) *UpdateQuery {
+	q.from = append(q.from, SQL(query, args...))
 	return q
 }
 
@@ -509,6 +517,15 @@ func (q *UpdateQuery) AppendQuery(w *SQLWriter) error {
 	}
 	if err := writeExprs(w, q.raw); err != nil {
 		return err
+	}
+	if len(q.from) > 0 {
+		if d.Name() != dialect.Postgres && d.Name() != dialect.SQLite {
+			return fmt.Errorf("dbal: UPDATE … FROM is not supported by %s", d.Name())
+		}
+		w.WriteString(" FROM ")
+		if err := writeExprs(w, q.from); err != nil {
+			return err
+		}
 	}
 	if mssql {
 		if len(q.returning) > 0 {

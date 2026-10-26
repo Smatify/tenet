@@ -32,6 +32,7 @@ type EntityManager struct {
 	// postFlushes, which are dispatched after the commit.
 	txDepth     int
 	postFlushes int
+	bulks       []*EventArgs // EventPostBulk waiting for the commit
 	filters     *Filters
 	cache       cache.Cache
 	// resolving is set while references are loaded: a reference points to
@@ -555,8 +556,8 @@ func (em *EntityManager) Transactional(ctx context.Context, fn func(ctx context.
 		return err
 	}
 	// postFlush waits for the commit of the outermost transaction.
-	n := em.postFlushes
-	em.postFlushes = 0
+	n, bulks := em.postFlushes, em.bulks
+	em.postFlushes, em.bulks = 0, nil
 	if err != nil {
 		if n > 0 || em.closed {
 			em.rollbackEvent(ctx)
@@ -565,6 +566,11 @@ func (em *EntityManager) Transactional(ctx context.Context, fn func(ctx context.
 	}
 	for range n {
 		if err := em.events.dispatch(ctx, EventPostFlush, &EventArgs{EM: em}); err != nil {
+			return err
+		}
+	}
+	for _, args := range bulks {
+		if err := em.events.dispatch(ctx, EventPostBulk, args); err != nil {
 			return err
 		}
 	}
