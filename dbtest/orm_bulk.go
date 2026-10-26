@@ -168,3 +168,36 @@ func testORMBulkInsert(t *testing.T, db *dbal.DB) {
 		}
 	}
 }
+
+func init() { Register(Case{"ORM/BulkDelete", testORMBulkDelete}) }
+
+func testORMBulkDelete(t *testing.T, db *dbal.DB) {
+	ctx := context.Background()
+	newEM := setupORM(t, db)
+	em := newEM()
+	for _, n := range []string{"ann", "bob", "cid"} {
+		must(t, em.Persist(&ormAuthor{name: n}))
+	}
+	must(t, em.Flush(ctx))
+	var ids [][]any
+	em.Events().On(func(_ context.Context, a *smorm.EventArgs) error { ids = append(ids, a.IDs); return nil }, smorm.EventPostBulk)
+	if _, err := smorm.Delete[ormAuthor](em).Exec(ctx); err == nil {
+		t.Fatal("a delete without condition must fail")
+	}
+	n, err := smorm.Delete[ormAuthor](em).Where(smorm.In("name", []string{"ann", "bob"})).Exec(ctx)
+	must(t, err)
+	if n != 2 || len(ids) != 1 {
+		t.Fatalf("deleted %d rows, %d events", n, len(ids))
+	}
+	if db.Dialect().Features().Has(dialect.FeatureReturning) && len(ids[0]) != 2 {
+		t.Fatalf("event IDs %v", ids[0])
+	}
+	if n, err := smorm.Delete[ormAuthor](em).Where(smorm.Eq("name", "nobody")).Exec(ctx); err != nil || n != 0 || len(ids) != 1 {
+		t.Fatalf("deleting nothing: %d rows, %d events (%v)", n, len(ids), err)
+	}
+	left, err := smorm.NewQuery[ormAuthor](newEM()).All(ctx)
+	must(t, err)
+	if len(left) != 1 || left[0].name != "cid" {
+		t.Fatalf("left %v", left)
+	}
+}

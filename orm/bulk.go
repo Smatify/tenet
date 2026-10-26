@@ -146,31 +146,7 @@ func (u *Update) Exec(ctx context.Context) (int, error) {
 	if err != nil {
 		return 0, err
 	}
-	meta := u.q.meta
-	id := u.returning()
-	if id == nil {
-		res, err := s.Exec(ctx)
-		if err != nil {
-			return 0, err
-		}
-		n, err := res.RowsAffected()
-		if err != nil || n == 0 {
-			return 0, err
-		}
-		return int(n), em.bulk(ctx, &EventArgs{EM: em, Meta: meta})
-	}
-	rows, err := s.Rows(ctx)
-	if err != nil {
-		return 0, err
-	}
-	ids, err := scanIDs(rows, id, em.db.Dialect().Name())
-	if err != nil {
-		return 0, err
-	}
-	if len(ids) == 0 { // nothing changed
-		return 0, nil
-	}
-	return len(ids), em.bulk(ctx, &EventArgs{EM: em, Meta: meta, IDs: ids})
+	return em.runBulk(ctx, u.q.meta, s, u.returning())
 }
 
 // scanIDs reads the identifiers a statement returned and closes rows.
@@ -399,8 +375,18 @@ func (i *Insert) Exec(ctx context.Context) (int, error) {
 	if err != nil {
 		return 0, err
 	}
-	meta := i.q.meta
-	id := meta.SingleID()
+	return em.runBulk(ctx, i.q.meta, s, i.q.meta.SingleID())
+}
+
+// bulkStatement is a bulk write as dbal renders it.
+type bulkStatement interface {
+	Exec(ctx context.Context) (sql.Result, error)
+	Rows(ctx context.Context) (*sql.Rows, error)
+}
+
+// runBulk runs s, returning the identifiers id when not nil, and raises
+// EventPostBulk when rows changed.
+func (em *EntityManager) runBulk(ctx context.Context, meta *mapping.Entity, s bulkStatement, id *mapping.Field) (int, error) {
 	if id == nil {
 		res, err := s.Exec(ctx)
 		if err != nil {
@@ -417,11 +403,87 @@ func (i *Insert) Exec(ctx context.Context) (int, error) {
 		return 0, err
 	}
 	ids, err := scanIDs(rows, id, em.db.Dialect().Name())
+	if err != nil || len(ids) == 0 {
+		return 0, err
+	}
+	return len(ids), em.bulk(ctx, &EventArgs{EM: em, Meta: meta, IDs: ids})
+}
+
+// Delete removes many rows of an entity type in one statement, using field
+// names. Like Update it bypasses the unit of work: loaded entities stay
+// managed, cascades and hooks do not run (the database's ON DELETE rules
+// do). Listeners get EventPostBulk with the IDs of the deleted rows. Build
+// it with EntityManager.NewDelete.
+type Delete struct{ q *Query }
+
+// NewDelete starts a bulk delete of the entity type t (alias "t0").
+func (em *EntityManager) NewDelete(t reflect.Type) *Delete {
+	q := em.NewQuery(t)
+	if q.err == nil && q.meta.Inheritance == mapping.Joined {
+		q.fail(fmt.Errorf("delete: %s uses joined inheritance", q.meta.Name))
+	}
+	return &Delete{q: q}
+}
+
+// Where adds conditions joined with AND; a delete needs one.
+func (d *Delete) Where(conds ...Cond) *Delete { d.q.Where(conds...); return d }
+
+// WithoutFilter disables the named filters for this delete.
+func (d *Delete) WithoutFilter(names ...string) *Delete { d.q.WithoutFilter(names...); return d }
+
+func (d *Delete) build() (*dbal.DeleteQuery, error) {
+	q := d.q
+	if q.err != nil {
+		return nil, q.err
+	}
+	if len(q.where) == 0 {
+		return nil, errors.New("delete: no condition (Where)")
+	}
+	meta := q.meta
+	out := q.em.db.NewDelete().TableAs(meta.Table, q.root)
+	where, err := And(q.where...).build(q)
+	if err != nil {
+		return nil, err
+	}
+	out.WhereExpr(where)
+	for _, c := range append(q.em.filterCondsExcept(meta, q.root, q.without), classConds(meta, q.root, !meta.IsPolymorphic())...) {
+		out.WhereExpr(c)
+	}
+	if id := d.returning(); id != nil {
+		col := q.root + "." + id.Column
+		if q.em.db.Dialect().Name() == dialect.SQLite {
+			col = id.Column
+		}
+		out.Returning(col)
+	}
+	return out, nil
+}
+
+func (d *Delete) returning() *mapping.Field {
+	if !d.q.em.db.Dialect().Features().Has(dialect.FeatureReturning) {
+		return nil
+	}
+	return d.q.meta.SingleID()
+}
+
+// SQL renders the delete for debugging.
+func (d *Delete) SQL() (string, []any, error) {
+	s, err := d.build()
+	if err != nil {
+		return "", nil, err
+	}
+	return s.Build()
+}
+
+// Exec runs the delete and returns the number of deleted rows.
+func (d *Delete) Exec(ctx context.Context) (int, error) {
+	em := d.q.em
+	if em.closed {
+		return 0, ErrClosed
+	}
+	s, err := d.build()
 	if err != nil {
 		return 0, err
 	}
-	if len(ids) == 0 { // nothing changed
-		return 0, nil
-	}
-	return len(ids), em.bulk(ctx, &EventArgs{EM: em, Meta: meta, IDs: ids})
+	return em.runBulk(ctx, d.q.meta, s, d.returning())
 }

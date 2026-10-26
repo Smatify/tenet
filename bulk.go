@@ -104,3 +104,29 @@ func (q *InsertQuery[T]) SQL() (string, []any, error) { return q.i.SQL() }
 
 // Exec runs the insert and returns the number of rows written.
 func (q *InsertQuery[T]) Exec(ctx context.Context) (int, error) { return q.i.Exec(ctx) }
+
+// DeleteQuery removes many rows of T in one statement (see Delete).
+type DeleteQuery[T any] struct{ d *orm.Delete }
+
+// Delete starts a bulk delete of T (alias "t0"). It bypasses the unit of
+// work: loaded entities stay managed, cascades and hooks do not run (the
+// database's ON DELETE rules do). Listeners get EventPostBulk with the IDs
+// of the deleted rows.
+func Delete[T any](em *EntityManager) *DeleteQuery[T] {
+	return &DeleteQuery[T]{d: em.NewDelete(reflect.TypeFor[T]())}
+}
+
+// Where adds conditions joined with AND; a delete needs one.
+func (q *DeleteQuery[T]) Where(conds ...Cond) *DeleteQuery[T] { q.d.Where(conds...); return q }
+
+// WithoutFilter disables the named filters for this delete.
+func (q *DeleteQuery[T]) WithoutFilter(names ...string) *DeleteQuery[T] {
+	q.d.WithoutFilter(names...)
+	return q
+}
+
+// SQL renders the delete for debugging.
+func (q *DeleteQuery[T]) SQL() (string, []any, error) { return q.d.SQL() }
+
+// Exec runs the delete and returns the number of deleted rows.
+func (q *DeleteQuery[T]) Exec(ctx context.Context) (int, error) { return q.d.Exec(ctx) }

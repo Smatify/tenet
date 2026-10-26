@@ -71,7 +71,7 @@ See [examples/blog](examples/blog) for a complete project generated this way.
   select expressions (`Column` with arguments, `Distinct`), `smorm.Scan[R]` reads their rows into a
   struct (columns by `db` tag or snake case name) or a single value, `Sub()` uses a query as a sub query (`As`
   names its alias, so a sub query inside can refer to it as plain SQL, `a.name`),
-  `smorm.Update[T]` changes and `smorm.Insert[T]` adds many rows in one statement (entities,
+  `smorm.Update[T]` changes, `smorm.Insert[T]` adds and `smorm.Delete[T]` removes many rows in one statement (entities,
   `INSERT … SELECT`, upserts with `OnConflict` and `{excluded.Field}`); listeners get
   `EventPostBulk` with the IDs of the rows after the commit. Bulk writes bypass the unit of
   work: no hooks, loaded entities keep their values, IDs the database generates are not set on
