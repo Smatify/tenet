@@ -121,7 +121,8 @@ const (
 	// EventOnRollback follows a flush whose writes were rolled back (also
 	// by Transactional): listeners forget what they collected for args.EM.
 	EventOnRollback Event = "onRollback"
-	// EventPostBulk follows a bulk write (Update) once it is committed:
+	// EventPostBulk follows a bulk write (Update, Insert) that changed rows
+	// once it is committed:
 	// Meta is the entity type, IDs the identifiers of the rows (nil when the
 	// type has no single identifier or the database returns no rows of an
 	// UPDATE, like MySQL and SQL Server: then any row may have changed).

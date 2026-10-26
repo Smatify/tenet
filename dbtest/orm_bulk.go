@@ -56,6 +56,9 @@ func testORMBulkUpdate(t *testing.T, db *dbal.DB) {
 	if got := scores(); got["ann"] != 5 || got["bob"] != 5 || got["cid"] != 0 {
 		t.Fatalf("scores %v", got)
 	}
+	if n, err := smorm.Update[ormAuthor](em).Set("score", 1).Where(smorm.Eq("name", "nobody")).Exec(ctx); err != nil || n != 0 || (returns && len(bulk) != 1) {
+		t.Fatalf("an update of no rows: %d rows, %d events (%v)", n, len(bulk), err)
+	}
 	if _, err := smorm.Update[ormAuthor](em).Set("score", 1).Exec(ctx); err == nil {
 		t.Fatal("an update without condition must fail")
 	}

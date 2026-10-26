@@ -154,7 +154,7 @@ func (u *Update) Exec(ctx context.Context) (int, error) {
 			return 0, err
 		}
 		n, err := res.RowsAffected()
-		if err != nil {
+		if err != nil || n == 0 {
 			return 0, err
 		}
 		return int(n), em.bulk(ctx, &EventArgs{EM: em, Meta: meta})
@@ -166,6 +166,9 @@ func (u *Update) Exec(ctx context.Context) (int, error) {
 	ids, err := scanIDs(rows, id, em.db.Dialect().Name())
 	if err != nil {
 		return 0, err
+	}
+	if len(ids) == 0 { // nothing changed
+		return 0, nil
 	}
 	return len(ids), em.bulk(ctx, &EventArgs{EM: em, Meta: meta, IDs: ids})
 }
@@ -404,7 +407,7 @@ func (i *Insert) Exec(ctx context.Context) (int, error) {
 			return 0, err
 		}
 		n, err := res.RowsAffected()
-		if err != nil {
+		if err != nil || n == 0 {
 			return 0, err
 		}
 		return int(n), em.bulk(ctx, &EventArgs{EM: em, Meta: meta})
@@ -416,6 +419,9 @@ func (i *Insert) Exec(ctx context.Context) (int, error) {
 	ids, err := scanIDs(rows, id, em.db.Dialect().Name())
 	if err != nil {
 		return 0, err
+	}
+	if len(ids) == 0 { // nothing changed
+		return 0, nil
 	}
 	return len(ids), em.bulk(ctx, &EventArgs{EM: em, Meta: meta, IDs: ids})
 }
