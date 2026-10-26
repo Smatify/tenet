@@ -75,6 +75,34 @@ func entityType(v any) reflect.Type {
 	return t
 }
 
+// JoinSub adds an INNER JOIN of a sub query (Sub) as alias on a
+// condition; its columns are plain SQL (alias.column).
+func (q *Query[T]) JoinSub(sub dbal.Expr, alias string, on Cond) *Query[T] {
+	q.q.JoinSub(sub, alias, on)
+	return q
+}
+
+// LeftJoinSub adds a LEFT JOIN of a sub query as alias on a condition.
+func (q *Query[T]) LeftJoinSub(sub dbal.Expr, alias string, on Cond) *Query[T] {
+	q.q.LeftJoinSub(sub, alias, on)
+	return q
+}
+
+// JoinLateral adds a sub query run for each row (JOIN LATERAL, Postgres
+// only); rows without a result drop. The sub query refers to the query
+// around it as plain SQL (As).
+func (q *Query[T]) JoinLateral(sub dbal.Expr, alias string) *Query[T] {
+	q.q.JoinLateral(sub, alias)
+	return q
+}
+
+// LeftJoinLateral adds a sub query run for each row, keeping rows without
+// a result (Postgres only).
+func (q *Query[T]) LeftJoinLateral(sub dbal.Expr, alias string) *Query[T] {
+	q.q.LeftJoinLateral(sub, alias)
+	return q
+}
+
 // Columns selects SQL expressions instead of entities, with {Field} or
 // {alias.Field} for columns: Columns("{ID} AS id", "count({c.ID}) AS n").
 // Read its rows with Scan or use it through Sub.

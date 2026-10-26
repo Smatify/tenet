@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/smatify/smorm/dbal"
+	"github.com/smatify/smorm/dialect"
 	"github.com/smatify/smorm/mapping"
 )
 
@@ -39,13 +40,16 @@ type Query struct {
 	root     string // alias of the queried entity (RootAlias, As)
 }
 
-// queryJoin joins an association (assoc) or an entity on a condition (on).
+// queryJoin joins an association (assoc), an entity on a condition
+// (target, on) or a sub query (sub, on or lateral).
 type queryJoin struct {
 	from, path, alias string
 	left              bool
 	assoc             *mapping.Association
 	target            *mapping.Entity
 	on                Cond
+	sub               dbal.Expr
+	lateral           bool
 }
 
 type queryOrder struct {
@@ -168,6 +172,51 @@ func (q *Query) joinOn(t reflect.Type, alias string, on Cond, left bool) *Query 
 	q.aliases[alias] = meta
 	q.joins = append(q.joins, queryJoin{alias: alias, left: left, target: meta, on: on})
 	return q
+}
+
+// JoinSub adds an INNER JOIN of a sub query (Sub) as alias on a
+// condition; its columns are plain SQL (alias.column).
+func (q *Query) JoinSub(sub dbal.Expr, alias string, on Cond) *Query {
+	return q.joinSub(queryJoin{sub: sub, alias: alias, on: on})
+}
+
+// LeftJoinSub adds a LEFT JOIN of a sub query as alias on a condition.
+func (q *Query) LeftJoinSub(sub dbal.Expr, alias string, on Cond) *Query {
+	return q.joinSub(queryJoin{sub: sub, alias: alias, on: on, left: true})
+}
+
+// JoinLateral adds a sub query run for each row (JOIN LATERAL, Postgres
+// only), e.g. the last post of each thread; rows without a result drop.
+// The sub query refers to the query around it as plain SQL (As).
+func (q *Query) JoinLateral(sub dbal.Expr, alias string) *Query {
+	return q.joinSub(queryJoin{sub: sub, alias: alias, lateral: true})
+}
+
+// LeftJoinLateral adds a sub query run for each row, keeping rows without
+// a result (LEFT JOIN LATERAL … ON true, Postgres only).
+func (q *Query) LeftJoinLateral(sub dbal.Expr, alias string) *Query {
+	return q.joinSub(queryJoin{sub: sub, alias: alias, lateral: true, left: true})
+}
+
+func (q *Query) joinSub(j queryJoin) *Query {
+	if q.err != nil {
+		return q
+	}
+	if _, dup := q.aliases[j.alias]; dup || j.alias == "" || q.subAlias(j.alias) {
+		return q.fail(fmt.Errorf("query: alias %q is empty or already used", j.alias))
+	}
+	q.joins = append(q.joins, j)
+	return q
+}
+
+// subAlias reports whether a sub query joins as alias.
+func (q *Query) subAlias(alias string) bool {
+	for _, j := range q.joins {
+		if j.sub != nil && j.alias == alias {
+			return true
+		}
+	}
+	return false
 }
 
 // Columns selects SQL expressions instead of entities, with {Field} or
@@ -497,6 +546,9 @@ func (q *Query) projection(out *dbal.SelectQuery) (*dbal.SelectQuery, error) {
 }
 
 func (q *Query) appendJoin(s *dbal.SelectQuery, j queryJoin) error {
+	if j.sub != nil {
+		return q.appendJoinSub(s, j)
+	}
 	if j.on != nil {
 		return q.appendJoinOn(s, j)
 	}
@@ -538,6 +590,27 @@ func (q *Query) appendJoin(s *dbal.SelectQuery, j queryJoin) error {
 		join(spec.table, jt, "? = ?", col(jt, spec.ownerCol), col(j.from, spec.ownerRef.Column))
 		target(col(j.alias, spec.targetRef.Column), col(jt, spec.targetCol))
 	}
+	return nil
+}
+
+// appendJoinSub joins a sub query.
+func (q *Query) appendJoinSub(s *dbal.SelectQuery, j queryJoin) error {
+	if j.lateral && q.em.db.Dialect().Name() != dialect.Postgres {
+		return fmt.Errorf("query: JOIN LATERAL is not supported by %s", q.em.db.Dialect().Name())
+	}
+	kind := "INNER JOIN "
+	if j.left {
+		kind = "LEFT JOIN "
+	}
+	if j.lateral {
+		s.Join(kind+"LATERAL ? AS ? ON true", j.sub, dbal.Ident(j.alias))
+		return nil
+	}
+	on, err := j.on.build(q)
+	if err != nil {
+		return err
+	}
+	s.Join(kind+"? AS ? ON ?", j.sub, dbal.Ident(j.alias), on)
 	return nil
 }
 

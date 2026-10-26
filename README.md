@@ -66,7 +66,8 @@ See [examples/blog](examples/blog) for a complete project generated this way.
   `smorm.Raw("{title} ILIKE ? OR {id} IN ?", pattern, ids)` inserts columns for `{field}`;
   a slice after `IN` is expanded, anywhere else (`= ANY(?)`) it is one array parameter.
 - **Projections and bulk writes** keep field names where a query is more than "load
-  entities": `JoinOn`/`LeftJoinOn` join an entity on a condition, `Columns` and `GroupBy`
+  entities": `JoinOn`/`LeftJoinOn` join an entity on a condition, `JoinSub`/`LeftJoinSub` a sub query,
+  `JoinLateral`/`LeftJoinLateral` a sub query per row, `Columns` and `GroupBy`
   select expressions (`Column` with arguments, `Distinct`), `smorm.Scan[R]` reads their rows into a
   struct (columns by `db` tag or snake case name) or a single value, `Sub()` uses a query as a sub query (`As`
   names its alias, so a sub query inside can refer to it as plain SQL, `a.name`),
@@ -88,6 +89,7 @@ they write; on any other, building the statement fails with an error (no SQL is 
 |---|---|---|---|---|
 | `UpdateQuery.From` (`UPDATE … FROM`) | yes | yes | no | no |
 | `smorm.Insert[T]` (bulk inserts, upserts) | yes | yes | no | no |
+| `JoinLateral`, `LeftJoinLateral` | yes | no | no | no |
 | IDs in `EventPostBulk` (`RETURNING`) | yes | yes | nil (any row may have changed) | nil |
 
 Identifiers, the order of events within `Flush`, transactions, listeners
