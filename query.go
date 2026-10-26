@@ -77,7 +77,7 @@ func entityType(v any) reflect.Type {
 
 // Columns selects SQL expressions instead of entities, with {Field} or
 // {alias.Field} for columns: Columns("{ID} AS id", "count({c.ID}) AS n").
-// Use such a query through Sub.
+// Read its rows with Scan or use it through Sub.
 func (q *Query[T]) Columns(exprs ...string) *Query[T] { q.q.Columns(exprs...); return q }
 
 // Column selects one SQL expression with ? arguments, e.g.
@@ -87,6 +87,9 @@ func (q *Query[T]) Column(sql string, args ...any) *Query[T] { q.q.Column(sql, a
 // As names the queried entity alias instead of "t0", so a sub query can
 // refer to the query around it.
 func (q *Query[T]) As(alias string) *Query[T] { q.q.As(alias); return q }
+
+// Distinct removes duplicate rows of a projection.
+func (q *Query[T]) Distinct() *Query[T] { q.q.Distinct(); return q }
 
 // GroupBy groups a projection by SQL expressions, e.g. "{ID}".
 func (q *Query[T]) GroupBy(exprs ...string) *Query[T] { q.q.GroupBy(exprs...); return q }

@@ -2,6 +2,7 @@ package orm
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"iter"
 	"reflect"
@@ -32,9 +33,10 @@ type Query struct {
 	aliases map[string]*mapping.Entity
 	without map[string]bool // filters disabled for this query
 	// columns and groupBy are SQL templates of a projection (Columns).
-	columns []rawCond
-	groupBy []string
-	root    string // alias of the queried entity (RootAlias, As)
+	columns  []rawCond
+	groupBy  []string
+	distinct bool
+	root     string // alias of the queried entity (RootAlias, As)
 }
 
 // queryJoin joins an association (assoc) or an entity on a condition (on).
@@ -184,6 +186,9 @@ func (q *Query) Column(sql string, args ...any) *Query {
 	q.columns = append(q.columns, rawCond{sql, args})
 	return q
 }
+
+// Distinct removes duplicate rows of a projection (Columns).
+func (q *Query) Distinct() *Query { q.distinct = true; return q }
 
 // GroupBy groups a projection (Columns) by SQL expressions, e.g. "{ID}".
 func (q *Query) GroupBy(exprs ...string) *Query { q.groupBy = append(q.groupBy, exprs...); return q }
@@ -452,6 +457,9 @@ func (q *Query) buildMode(count, refs bool) (*dbal.SelectQuery, error) {
 
 // projection finishes inner as a selection of Columns.
 func (q *Query) projection(out *dbal.SelectQuery) (*dbal.SelectQuery, error) {
+	if q.distinct {
+		out.Distinct()
+	}
 	for _, c := range q.columns {
 		e, err := c.build(q)
 		if err != nil {
@@ -660,6 +668,21 @@ func (q *Query) One(ctx context.Context) (any, error) {
 		return nil, ErrNotFound
 	}
 	return res[0], nil
+}
+
+// Rows runs a projection (Columns) and returns its rows.
+func (q *Query) Rows(ctx context.Context) (*sql.Rows, error) {
+	if q.em.closed {
+		return nil, ErrClosed
+	}
+	if len(q.columns) == 0 {
+		return nil, fmt.Errorf("query: Rows needs Columns")
+	}
+	s, err := q.build(false)
+	if err != nil {
+		return nil, err
+	}
+	return s.Rows(ctx)
 }
 
 // Count returns the number of matching entities, ignoring limit and offset.
