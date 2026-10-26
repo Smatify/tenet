@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"fmt"
 	"reflect"
+	"regexp"
 	"slices"
 	"strconv"
 	"strings"
@@ -316,20 +317,26 @@ func (r *Registry) parse(t reflect.Type) (*Entity, error) {
 // entityIndexes adds the indexes declared on the entity header, e.g.
 // index:subsite|createdAt;stream: groups of fields or to-one associations
 // separated by semicolons. They cover columns a field tag cannot reach
-// (join columns, embedded timestamps).
+// (join columns, embedded timestamps). A group may end in a predicate
+// after "?" that makes the index partial, naming fields in braces:
+// index:subsite?{approvedAt} IS NULL indexes only the rows it matches.
 func (e *Entity) entityIndexes(v string) error {
 	if v == "" {
 		return nil
 	}
+	column := func(name string) string {
+		for _, f := range e.Fields {
+			if f.Name == name || (f.Name == "" && f.Assoc != nil && f.Assoc.Name == name) {
+				return f.Column
+			}
+		}
+		return ""
+	}
 	for _, group := range strings.Split(v, ";") {
+		group, pred, partial := strings.Cut(group, "?")
 		var cols []string
 		for _, name := range List(group) {
-			col := ""
-			for _, f := range e.Fields {
-				if f.Name == name || (f.Name == "" && f.Assoc != nil && f.Assoc.Name == name) {
-					col = f.Column
-				}
-			}
+			col := column(name)
 			if col == "" {
 				return fmt.Errorf("index: unknown field %q", name)
 			}
@@ -338,9 +345,37 @@ func (e *Entity) entityIndexes(v string) error {
 		if len(cols) == 0 {
 			return fmt.Errorf("index: empty group in %q", v)
 		}
-		e.Indexes = append(e.Indexes, &IndexDef{Name: schema.IdentifierName("idx", e.Table, cols), Columns: cols})
+		d := &IndexDef{Name: schema.IdentifierName("idx", e.Table, cols), Columns: cols}
+		if partial {
+			var err error
+			if d.Where, err = predicateColumns(strings.TrimSpace(pred), column); err != nil {
+				return err
+			}
+			if d.Where == "" {
+				return fmt.Errorf("index: empty predicate in %q", v)
+			}
+			d.Name = schema.IdentifierName("pidx", e.Table, cols)
+		}
+		e.Indexes = append(e.Indexes, d)
 	}
 	return nil
+}
+
+var predicateField = regexp.MustCompile(`\{(\w+)\}`)
+
+// predicateColumns replaces the {field} names of a partial index predicate
+// by their columns.
+func predicateColumns(pred string, column func(string) string) (string, error) {
+	var err error
+	out := predicateField.ReplaceAllStringFunc(pred, func(m string) string {
+		name := m[1 : len(m)-1]
+		col := column(name)
+		if col == "" && err == nil {
+			err = fmt.Errorf("index: unknown field %q in predicate %q", name, pred)
+		}
+		return col
+	})
+	return out, err
 }
 
 var (

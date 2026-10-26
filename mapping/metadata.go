@@ -310,6 +310,7 @@ type IndexDef struct {
 	Name    string
 	Columns []string
 	Unique  bool
+	Where   string // partial index predicate with column names ("" for none)
 }
 
 // CollectionField is implemented by collection container types such as

@@ -570,6 +570,44 @@ func TestEntityIndexes(t *testing.T) {
 	}
 }
 
+type PendingPost struct {
+	entity.Header `smorm:"index:author|CreatedAt?{approvedAt} IS NULL AND {author} IS NOT NULL"`
+	ID            int64
+	Timestamps
+	author     *User `smorm:"manyToOne"`
+	approvedAt *time.Time
+}
+
+func TestPartialEntityIndex(t *testing.T) {
+	e, err := For[PendingPost](NewRegistry())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(e.Indexes) != 1 {
+		t.Fatalf("indexes = %+v", e.Indexes)
+	}
+	d := e.Indexes[0]
+	if d.Name != "pidx_pending_post_author_id_created_at" || d.Where != "approved_at IS NULL AND author_id IS NOT NULL" {
+		t.Fatalf("index = %+v", d)
+	}
+	table := BuildSchema([]*Entity{e}).Table("pending_post")
+	if ddl := table.Index(d.Name); ddl == nil || ddl.Where != d.Where {
+		t.Fatalf("schema index = %+v", ddl)
+	}
+	// The partial index holds some rows only: the foreign key keeps its own.
+	if table.Index("idx_pending_post_author_id") == nil {
+		t.Fatalf("indexes = %+v", table.Indexes)
+	}
+	type bad struct {
+		entity.Header `smorm:"index:CreatedAt?{missing} IS NULL"`
+		ID            int64
+		Timestamps
+	}
+	if _, err := For[bad](NewRegistry()); err == nil || !strings.Contains(err.Error(), `unknown field "missing" in predicate`) {
+		t.Fatalf("err = %v", err)
+	}
+}
+
 type NumberedPost struct {
 	entity.Header
 	ID     uuid.UUID `smorm:"id"`

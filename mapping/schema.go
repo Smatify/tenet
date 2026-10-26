@@ -44,7 +44,7 @@ func BuildSchema(entities []*Entity) *schema.Schema {
 		}
 		t.SetPrimaryKey(pk...)
 		for _, d := range e.Indexes {
-			t.Indexes = append(t.Indexes, &schema.Index{Name: d.Name, Columns: slices.Clone(d.Columns), Unique: d.Unique})
+			t.Indexes = append(t.Indexes, &schema.Index{Name: d.Name, Columns: slices.Clone(d.Columns), Unique: d.Unique, Where: d.Where})
 		}
 		for _, a := range e.Assocs {
 			if !a.Owning || !a.Kind.IsToOne() {
@@ -91,13 +91,14 @@ func BuildSchema(entities []*Entity) *schema.Schema {
 	return s
 }
 
-// coveredByIndex reports whether an existing index or the primary key starts with col.
+// coveredByIndex reports whether an existing index or the primary key starts with col;
+// a partial index does not cover it (it holds some rows only).
 func coveredByIndex(t *schema.Table, col string) bool {
 	if t.PrimaryKey != nil && strings.EqualFold(t.PrimaryKey.Columns[0], col) {
 		return true
 	}
 	for _, i := range t.Indexes {
-		if strings.EqualFold(i.Columns[0], col) {
+		if i.Where == "" && strings.EqualFold(i.Columns[0], col) {
 			return true
 		}
 	}
@@ -170,7 +171,7 @@ func addSubclass(s *schema.Schema, e *Entity) {
 func addOwnConstraints(t *schema.Table, e *Entity) {
 	for _, d := range e.Indexes {
 		if t.Index(d.Name) == nil {
-			t.Indexes = append(t.Indexes, &schema.Index{Name: d.Name, Columns: slices.Clone(d.Columns), Unique: d.Unique})
+			t.Indexes = append(t.Indexes, &schema.Index{Name: d.Name, Columns: slices.Clone(d.Columns), Unique: d.Unique, Where: d.Where})
 		}
 	}
 	for _, a := range e.Assocs {
