@@ -211,3 +211,19 @@ func TestParseDeclAndActions(t *testing.T) {
 		t.Fatal("unparseable fallback")
 	}
 }
+
+func TestNormalizePredicateCasts(t *testing.T) {
+	for _, c := range [][2]string{
+		{`notified_status IS DISTINCT FROM status OR notified_starts_at IS DISTINCT FROM starts_at`,
+			`(((notified_status)::text IS DISTINCT FROM (status)::text) OR (notified_starts_at IS DISTINCT FROM starts_at))`},
+		{`kind = 'match'`, `((kind)::text = 'match'::character varying(10))`},
+		{`at > now()`, `(at > (now())::timestamp with time zone)`},
+	} {
+		if a, b := normalizePredicate(c[0]), normalizePredicate(c[1]); a != b {
+			t.Errorf("%q and %q: %q != %q", c[0], c[1], a, b)
+		}
+	}
+	if normalizePredicate("a = 1") == normalizePredicate("b = 1") {
+		t.Error("different columns compare equal")
+	}
+}

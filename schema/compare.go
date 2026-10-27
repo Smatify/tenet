@@ -220,7 +220,12 @@ func (c *Comparator) normAction(a Action) Action {
 
 func normalizeSpace(s string) string { return strings.ToUpper(strings.Join(strings.Fields(s), " ")) }
 
+// pgPredicateCast is a cast Postgres adds when it prints a predicate
+// ((status)::text IS DISTINCT FROM …).
+var pgPredicateCast = regexp.MustCompile(`::(character varying|bit varying|double precision|(timestamp|time)(\(\d+\))? with(out)? time zone|"?[a-z_][a-z0-9_]*"?)(\(\d+(,\s*\d+)?\))?(\[\])*`)
+
 func normalizePredicate(s string) string {
+	s = pgPredicateCast.ReplaceAllString(strings.ToLower(s), "")
 	return strings.Map(func(r rune) rune {
 		switch r {
 		case ' ', '\t', '\n', '(', ')', '"', '`', '[', ']':
