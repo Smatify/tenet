@@ -312,6 +312,8 @@ func singular(s string) string {
 	case strings.HasSuffix(s, "sses"), strings.HasSuffix(s, "xes"), strings.HasSuffix(s, "ches"), strings.HasSuffix(s, "shes"),
 		strings.HasSuffix(s, "iases"), strings.HasSuffix(s, "tuses"), strings.HasSuffix(s, "nuses"), strings.HasSuffix(s, "puses"), strings.HasSuffix(s, "ruses"):
 		return s[:len(s)-2]
+	case strings.HasSuffix(s, "lves") && !strings.HasSuffix(s, "valves"):
+		return s[:len(s)-3] + "f" // halves, shelves, wolves
 	case strings.HasSuffix(s, "oes") && len(s) > 4 && !strings.HasSuffix(s, "shoes"):
 		return s[:len(s)-2] // heroes, vetoes, potatoes
 	case strings.HasSuffix(s, "s") && !strings.HasSuffix(s, "ss") && len(s) > 1:

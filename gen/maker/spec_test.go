@@ -181,7 +181,7 @@ func TestApplyErrors(t *testing.T) {
 }
 
 func TestNames(t *testing.T) {
-	for in, want := range map[string]string{"posts": "post", "heroes": "hero", "vetoes": "veto", "shoes": "shoe", "toes": "toe", "categories": "category", "boxes": "box", "classes": "class", "news": "new", "data": "data", "address": "address",
+	for in, want := range map[string]string{"posts": "post", "heroes": "hero", "halves": "half", "shelves": "shelf", "valves": "valve", "vetoes": "veto", "shoes": "shoe", "toes": "toe", "categories": "category", "boxes": "box", "classes": "class", "news": "new", "data": "data", "address": "address",
 		"aliases": "alias", "statuses": "status", "bonuses": "bonus", "viruses": "virus", "houses": "house", "responses": "response"} {
 		if got := singular(in); got != want {
 			t.Errorf("singular(%q) = %q", in, got)

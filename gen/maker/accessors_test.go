@@ -81,3 +81,47 @@ type Tag struct {
 		t.Fatalf("second run = %v, %v", again, err)
 	}
 }
+
+// TestAccessorsOtherSide: completing only the side with the collection
+// also adds the setter of the other side, so adding sets it.
+func TestAccessorsOtherSide(t *testing.T) {
+	dir := tempModule(t)
+	entDir := filepath.Join(dir, "entity")
+	if err := os.MkdirAll(entDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	src := `package entity
+
+import "github.com/smatify/smorm"
+
+type Game struct {
+	smorm.Entity
+	smorm.UUIDID
+	halves smorm.Collection[Half] ` + "`smorm:\"oneToMany,mappedBy:game\"`" + `
+}
+
+type Half struct {
+	smorm.Entity
+	smorm.UUIDID
+	game  *Game ` + "`smorm:\"manyToOne,inversedBy:halves\"`" + `
+	score int32
+}
+`
+	if err := os.WriteFile(filepath.Join(entDir, "game.go"), []byte(src), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	added, err := (&Maker{Dir: entDir}).Accessors("Game")
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []string{"Game.Halves", "Game.AddHalf", "Game.RemoveHalf", "Game.SetHalves", "Half.Game", "Half.SetGame"}
+	slices.Sort(added)
+	slices.Sort(want)
+	if !slices.Equal(added, want) {
+		t.Fatalf("added = %v", added)
+	}
+	out, _ := os.ReadFile(filepath.Join(entDir, "game.go"))
+	if !strings.Contains(string(out), "item.SetGame(g)") {
+		t.Errorf("AddHalf does not set the game:\n%s", out)
+	}
+}

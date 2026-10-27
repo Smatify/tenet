@@ -1,6 +1,7 @@
 package maker
 
 import (
+	"cmp"
 	"go/ast"
 	"go/parser"
 	"go/token"
@@ -35,7 +36,20 @@ func (mk *Maker) Accessors(entities ...string) ([]string, error) {
 		return nil, err
 	}
 	if len(entities) > 0 {
-		fields = slices.DeleteFunc(fields, func(f mappedField) bool { return !slices.Contains(entities, f.entity) })
+		// The other side of their associations is completed too: adding to a
+		// collection sets it (item.SetTeam), so its accessors must exist.
+		other := map[[2]string]bool{}
+		for _, f := range fields {
+			if f.target == "" || !slices.Contains(entities, f.entity) {
+				continue
+			}
+			if by := cmp.Or(f.tag.Get("mappedBy"), f.tag.Get("inversedBy")); by != "" {
+				other[[2]string{f.target, by}] = true
+			}
+		}
+		fields = slices.DeleteFunc(fields, func(f mappedField) bool {
+			return !slices.Contains(entities, f.entity) && !other[[2]string{f.entity, f.name}]
+		})
 	}
 	// Methods present after this run, for the hooks that sync the other
 	// side of an association.
