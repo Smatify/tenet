@@ -69,12 +69,19 @@ func testTypeRoundtrip(t *testing.T, db *dbal.DB) {
 			in, func(dest any) any { return typ.ScanTarget(dest, d.Name()) },
 			func() any { p := &moment; return &p }, func(_, out any) bool { return out.(*time.Time) == nil })
 	})
-	t.Run("NullJSON", func(t *testing.T) {
+	t.Run("NullJSON", func(t *testing.T) { // a nil pointer: the nullable field
+		typ := types.Default.MustLookup(types.JSON)
+		var in *map[string]any
+		roundtrip(t, db, typ.SQLDeclaration(d.Name(), types.Options{}), func(v any) (any, error) { return typ.ToDatabase(v, d.Name()) },
+			in, func(dest any) any { return typ.ScanTarget(dest, d.Name()) },
+			func() any { m := &map[string]any{"x": 1}; return &m }, func(_, out any) bool { return out.(*map[string]any) == nil })
+	})
+	t.Run("EmptyJSON", func(t *testing.T) { // a nil map of a field without pointer: {}
 		typ := types.Default.MustLookup(types.JSON)
 		var in map[string]any
 		roundtrip(t, db, typ.SQLDeclaration(d.Name(), types.Options{}), func(v any) (any, error) { return typ.ToDatabase(v, d.Name()) },
 			in, func(dest any) any { return typ.ScanTarget(dest, d.Name()) },
-			func() any { return &map[string]any{"x": 1} }, func(_, out any) bool { return out.(map[string]any) == nil })
+			func() any { return new(map[string]any) }, func(_, out any) bool { m := out.(map[string]any); return m != nil && len(m) == 0 })
 	})
 }
 
