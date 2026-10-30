@@ -279,8 +279,18 @@ func (jsonType) SQLDeclaration(d dialect.Name, _ Options) string {
 	}
 }
 
-// ToDatabase marshals v to a JSON string. nil pointers, maps and slices become NULL.
+// ToDatabase marshals v to a JSON string. A nil pointer becomes NULL (a
+// pointer field is the nullable column); a nil slice or map of a field
+// without pointer becomes [] or {}, its column is NOT NULL.
 func (jsonType) ToDatabase(v any, _ dialect.Name) (any, error) {
+	if v != nil {
+		switch rv := reflect.ValueOf(v); {
+		case rv.Kind() == reflect.Slice && rv.IsNil():
+			return "[]", nil
+		case rv.Kind() == reflect.Map && rv.IsNil():
+			return "{}", nil
+		}
+	}
 	if isNil(v) {
 		return nil, nil
 	}

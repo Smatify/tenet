@@ -219,9 +219,18 @@ func TestJSON(t *testing.T) {
 	if v, _ := typ.ToDatabase(json.RawMessage(`[1]`), dialect.Postgres); v != "[1]" {
 		t.Fatalf("raw = %v", v)
 	}
+	// A nil map or slice is a field without pointer: its column is NOT NULL.
 	var nilMap map[string]any
-	if v, _ := typ.ToDatabase(nilMap, dialect.Postgres); v != nil {
+	if v, _ := typ.ToDatabase(nilMap, dialect.Postgres); v != "{}" {
 		t.Fatalf("nil map = %v", v)
+	}
+	var nilSlice []string
+	if v, _ := typ.ToDatabase(nilSlice, dialect.Postgres); v != "[]" {
+		t.Fatalf("nil slice = %v", v)
+	}
+	var nilPointer *payload
+	if v, _ := typ.ToDatabase(nilPointer, dialect.Postgres); v != nil {
+		t.Fatalf("nil pointer = %v", v)
 	}
 	if v, _ := typ.ToDatabase(nil, dialect.Postgres); v != nil {
 		t.Fatalf("nil = %v", v)
