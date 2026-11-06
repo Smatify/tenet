@@ -71,6 +71,25 @@ type Dialect interface {
 	RollbackToSavepointSQL(name string) string
 }
 
+// BindLimiter is implemented by dialects whose databases take more bind
+// parameters per statement than DefaultMaxBindParams: batched inserts and
+// updates then send fewer, larger statements.
+type BindLimiter interface {
+	MaxBindParams() int
+}
+
+// DefaultMaxBindParams is the bind parameter limit of a dialect without
+// BindLimiter (SQL Server allows 2100 per statement).
+const DefaultMaxBindParams = 2000
+
+// MaxBindParams returns the bind parameter limit of d.
+func MaxBindParams(d Dialect) int {
+	if l, ok := d.(BindLimiter); ok && l.MaxBindParams() > 0 {
+		return l.MaxBindParams()
+	}
+	return DefaultMaxBindParams
+}
+
 // Base implements the parts of Dialect that are identical for most databases.
 // Dialects embed it and override what differs.
 type Base struct{}

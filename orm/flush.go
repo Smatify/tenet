@@ -697,7 +697,7 @@ func (em *EntityManager) updateBatch(ctx context.Context, db dbal.IDB, us []upda
 	}
 	head := "UPDATE " + d.QuoteIdent(meta.Table) + " AS t SET " + set.String() + " FROM (VALUES "
 	tail := ") AS v(" + cols.String() + ") WHERE t." + d.QuoteIdent(idf.Column) + " = v." + d.QuoteIdent(idf.Column)
-	rows := max(1, min(maxBatchRows, maxBindParams/len(fields)))
+	rows := max(1, min(maxBatchRows, dialect.MaxBindParams(em.db.Dialect())/len(fields)))
 	for start := 0; start < len(us); start += rows {
 		chunk := us[start:min(start+rows, len(us))]
 		var b bytes.Buffer
@@ -848,10 +848,6 @@ func (em *EntityManager) refersTo(e *entry, batch []*entry) bool {
 	return false
 }
 
-// maxBindParams is a conservative bind parameter limit per statement
-// (SQL Server allows 2100, SQLite builds commonly 32766).
-const maxBindParams = 2000
-
 // maxBatchRows caps rows per multi-row INSERT.
 const maxBatchRows = 500
 
@@ -882,7 +878,7 @@ func (em *EntityManager) insertBatch(ctx context.Context, db dbal.IDB, batch []*
 		fields = append(fields, f)
 		cols = append(cols, f.Column)
 	}
-	rows := max(1, min(maxBatchRows, maxBindParams/max(len(cols), 1)))
+	rows := max(1, min(maxBatchRows, dialect.MaxBindParams(em.db.Dialect())/max(len(cols), 1)))
 	for start := 0; start < len(batch); start += rows {
 		chunk := batch[start:min(start+rows, len(batch))]
 		q := db.NewInsert().Table(meta.Table).Columns(cols...)

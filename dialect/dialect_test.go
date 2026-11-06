@@ -54,3 +54,24 @@ func TestDollarPlaceholder(t *testing.T) {
 		}
 	}
 }
+
+// limited is a dialect stub that states its bind parameter limit.
+type limited struct {
+	Dialect
+	n int
+}
+
+func (l limited) MaxBindParams() int { return l.n }
+
+func TestMaxBindParams(t *testing.T) {
+	if got := MaxBindParams(limited{n: 65535}); got != 65535 {
+		t.Errorf("stated limit: %d", got)
+	}
+	if got := MaxBindParams(limited{n: 0}); got != DefaultMaxBindParams {
+		t.Errorf("no limit stated: %d", got)
+	}
+	var plain Dialect
+	if got := MaxBindParams(plain); got != DefaultMaxBindParams {
+		t.Errorf("dialect without BindLimiter: %d", got)
+	}
+}

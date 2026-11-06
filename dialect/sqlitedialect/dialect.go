@@ -19,6 +19,9 @@ func New() *Dialect {
 }
 
 // Name implements dialect.Dialect.
+// MaxBindParams implements dialect.BindLimiter: SQLITE_MAX_VARIABLE_NUMBER since 3.32.
+func (d *Dialect) MaxBindParams() int { return 32766 }
+
 func (d *Dialect) Name() dialect.Name { return dialect.SQLite }
 
 // Features implements dialect.Dialect.

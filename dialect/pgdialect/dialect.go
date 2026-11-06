@@ -20,6 +20,9 @@ func New() *Dialect {
 }
 
 // Name implements dialect.Dialect.
+// MaxBindParams implements dialect.BindLimiter: the protocol counts parameters in 16 bits.
+func (d *Dialect) MaxBindParams() int { return 65535 }
+
 func (d *Dialect) Name() dialect.Name { return dialect.Postgres }
 
 // Features implements dialect.Dialect.
