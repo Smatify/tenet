@@ -150,6 +150,9 @@ func (m *Migrator) Unlock(ctx context.Context) error {
 // Applied returns the executed versions with their execution time.
 func (m *Migrator) Applied(ctx context.Context) (map[string]time.Time, error) {
 	out := map[string]time.Time{}
+	if !m.tableExists(ctx, m.table) { // a new database: nothing applied yet (Init creates the table)
+		return out, nil
+	}
 	d := m.db.Dialect().Name()
 	dt := types.Default.MustLookup(types.DateTime)
 	rows, err := m.db.NewSelect().Column("version", "executed_at").Table(m.table).Rows(ctx)
