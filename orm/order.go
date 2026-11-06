@@ -7,10 +7,93 @@ import (
 )
 
 // commitOrder sorts entities scheduled for insertion so that every entity is
-// inserted after the entities its foreign keys point to. Cycles are broken at
-// a nullable foreign key: the entity is inserted with NULL and updated after
+// inserted after the entities its foreign keys point to. When the types
+// depend on each other without cycles or self-references, the entities go
+// type by type in the order they were persisted, so each type is one run
+// of batched inserts (entity by entity, parents and children took turns:
+// one statement of a few rows each). Otherwise cycles are broken at a
+// nullable foreign key: the entity is inserted with NULL and updated after
 // all inserts (recorded in entry.deferred).
 func commitOrder(em *EntityManager, inserts []*entry) ([]*entry, error) {
+	if out, ok := typeOrder(em, inserts); ok {
+		return out, nil
+	}
+	return entryOrder(em, inserts)
+}
+
+// typeOrder sorts inserts by the dependencies of their types; ok is false
+// when a type refers to itself or the types form a cycle among inserts.
+func typeOrder(em *EntityManager, inserts []*entry) ([]*entry, bool) {
+	pending := make(map[*entry]bool, len(inserts))
+	for _, e := range inserts {
+		pending[e] = true
+	}
+	type meta = *mapping.Entity
+	var types []meta
+	byType := map[meta][]*entry{}
+	deps := map[meta]map[meta]bool{}
+	for _, e := range inserts {
+		if _, ok := byType[e.meta]; !ok {
+			types = append(types, e.meta)
+			deps[e.meta] = map[meta]bool{}
+		}
+		byType[e.meta] = append(byType[e.meta], e)
+		for _, f := range e.meta.Fields {
+			if f.Assoc == nil {
+				continue
+			}
+			target := em.assocTarget(e, f.Assoc)
+			if target == nil {
+				continue
+			}
+			dep := em.entryOf(f.Assoc.Target, target)
+			if dep == nil || !pending[dep] {
+				continue
+			}
+			if dep.meta == e.meta {
+				return nil, false
+			}
+			deps[e.meta][dep.meta] = true
+		}
+	}
+	const (
+		unvisited = iota
+		visiting
+		done
+	)
+	state := map[meta]int{}
+	out := make([]*entry, 0, len(inserts))
+	var visit func(t meta) bool
+	visit = func(t meta) bool {
+		state[t] = visiting
+		for _, d := range types { // in persist order, for a stable result
+			if !deps[t][d] {
+				continue
+			}
+			switch state[d] {
+			case visiting:
+				return false
+			case unvisited:
+				if !visit(d) {
+					return false
+				}
+			}
+		}
+		state[t] = done
+		out = append(out, byType[t]...)
+		return true
+	}
+	for _, t := range types {
+		if state[t] == unvisited && !visit(t) {
+			return nil, false
+		}
+	}
+	return out, true
+}
+
+// entryOrder sorts inserts entity by entity (depth first along their
+// foreign keys), breaking cycles at nullable foreign keys.
+func entryOrder(em *EntityManager, inserts []*entry) ([]*entry, error) {
 	pending := make(map[*entry]bool, len(inserts))
 	for _, e := range inserts {
 		pending[e] = true
