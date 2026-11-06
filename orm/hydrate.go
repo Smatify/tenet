@@ -429,10 +429,15 @@ func (em *EntityManager) resolvePending(ctx context.Context, pending []pendingRe
 		for _, p := range ps {
 			ids = append(ids, idArg{f: idf, v: p.id})
 		}
-		if _, err := em.loadWhere(ctx, a.Target, func(q *dbal.SelectQuery) {
-			q.Where("? IN ?", dbal.Ident(idf.Column), dbal.In(ids))
-		}, 0); err != nil {
-			return err
+		for len(ids) > 0 {
+			n := min(len(ids), preloadChunk)
+			part := ids[:n]
+			ids = ids[n:]
+			if _, err := em.loadWhere(ctx, a.Target, func(q *dbal.SelectQuery) {
+				q.Where("? IN ?", dbal.Ident(idf.Column), dbal.In(part))
+			}, 0); err != nil {
+				return err
+			}
 		}
 		for _, p := range ps {
 			if e := em.lookup(a.Target, idKey([]any{p.id})); e != nil && isA(e.meta, a.Target) {

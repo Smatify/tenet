@@ -161,13 +161,18 @@ func (em *EntityManager) preloadMany(ctx context.Context, a *mapping.Association
 			}
 		}
 		var targets []any
-		if len(targetIDs) > 0 {
-			if targets, err = em.loadWhere(ctx, a.Target, func(q *dbal.SelectQuery) {
-				q.Where("? IN ?", dbal.Ident(spec.targetRef.Column), dbal.In(targetIDs))
+		for len(targetIDs) > 0 {
+			n := min(len(targetIDs), preloadChunk)
+			part := targetIDs[:n]
+			targetIDs = targetIDs[n:]
+			res, err := em.loadWhere(ctx, a.Target, func(q *dbal.SelectQuery) {
+				q.Where("? IN ?", dbal.Ident(spec.targetRef.Column), dbal.In(part))
 				applyOrderBy(q, a)
-			}, 0); err != nil {
+			}, 0)
+			if err != nil {
 				return nil, err
 			}
+			targets = append(targets, res...)
 		}
 		byTarget := map[any]any{}
 		for _, t := range targets {

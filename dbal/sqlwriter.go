@@ -171,7 +171,9 @@ func (e RawExpr) AppendSQL(w *SQLWriter) error { return w.WriteExpr(e.Query, e.A
 type InExpr struct{ values any }
 
 // In expands a slice into (?, ?, ...). An empty slice renders (NULL) so that
-// "x IN ?" matches nothing instead of producing invalid SQL.
+// "x IN ?" matches nothing instead of producing invalid SQL. Values that
+// repeat are bound once: lists collected from many rows (the game of every
+// match) stay within the bind parameter limit of the database.
 func In(slice any) InExpr { return InExpr{values: slice} }
 
 // AppendSQL implements Expr.
@@ -184,11 +186,21 @@ func (e InExpr) AppendSQL(w *SQLWriter) error {
 	if rv.Len() == 0 {
 		w.WriteString("NULL")
 	}
+	seen := map[any]bool{}
+	n := 0
 	for i := range rv.Len() {
-		if i > 0 {
+		v := rv.Index(i).Interface()
+		if v != nil && reflect.ValueOf(v).Comparable() {
+			if seen[v] {
+				continue
+			}
+			seen[v] = true
+		}
+		if n > 0 {
 			w.WriteString(", ")
 		}
-		if err := w.WriteArg(rv.Index(i).Interface()); err != nil {
+		n++
+		if err := w.WriteArg(v); err != nil {
 			return err
 		}
 	}

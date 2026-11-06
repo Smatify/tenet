@@ -53,6 +53,8 @@ func TestWriteExpr(t *testing.T) {
 	}
 	s, args, err = Build(d, SQL("x IN ?", In([2]int{7, 8})))
 	expectSQL(t, s, args, err, "x IN ($1, $2)", 7, 8)
+	s, args, err = Build(d, SQL("x IN ?", In([]any{7, 8, 7, 7, 8})))
+	expectSQL(t, s, args, err, "x IN ($1, $2)", 7, 8) // repeated values are bound once
 	s, args, err = Build(d, Ident("t.*"))
 	expectSQL(t, s, args, err, `"t".*`)
 	if _, _, err := Build(d, SQL("? ?", SQL("?"), 1)); err == nil {
