@@ -46,8 +46,11 @@ func (t *Timestamps) CreatedAt() time.Time { return t.createdAt }
 // UpdatedAt returns when the entity was last written.
 func (t *Timestamps) UpdatedAt() time.Time { return t.updatedAt }
 
-// TouchCreated implements mapping.CreatedToucher.
+// TouchCreated implements mapping.CreatedToucher. Times are kept in UTC to
+// the microsecond, as the databases store them: an entity reads the same
+// time before and after it is loaded again.
 func (t *Timestamps) TouchCreated(now time.Time) {
+	now = stored(now)
 	if t.createdAt.IsZero() {
 		t.createdAt = now
 	}
@@ -55,7 +58,11 @@ func (t *Timestamps) TouchCreated(now time.Time) {
 }
 
 // TouchUpdated implements mapping.UpdatedToucher.
-func (t *Timestamps) TouchUpdated(now time.Time) { t.updatedAt = now }
+func (t *Timestamps) TouchUpdated(now time.Time) { t.updatedAt = stored(now) }
+
+// stored is now as a timestamp column keeps it: UTC, microseconds, no
+// monotonic reading.
+func stored(now time.Time) time.Time { return now.UTC().Truncate(time.Microsecond) }
 
 // SoftDelete is a trait for entities that are marked as deleted instead of
 // being removed. EntityManager.Remove sets deleted_at; removing an already
@@ -77,7 +84,7 @@ func (s *SoftDelete) Restore() { s.deletedAt = nil }
 
 // MarkDeleted implements orm.SoftDeletable.
 func (s *SoftDelete) MarkDeleted(now time.Time) {
-	t := now.UTC().Truncate(time.Microsecond)
+	t := stored(now)
 	s.deletedAt = &t
 }
 

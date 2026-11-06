@@ -76,3 +76,26 @@ func TestTimestampsTouch(t *testing.T) {
 		t.Fatal("UUIDID zero value")
 	}
 }
+
+// TestTimestampsAsStored: the times are kept as a timestamp column stores
+// them (UTC, microseconds, no monotonic reading), so they compare equal to
+// the same entity loaded again; soft deletes alike.
+func TestTimestampsAsStored(t *testing.T) {
+	berlin := time.FixedZone("CET", 3600)
+	now := time.Date(2026, 3, 1, 12, 0, 0, 123456789, berlin)
+	want := time.Date(2026, 3, 1, 11, 0, 0, 123456000, time.UTC)
+	var u traitUser
+	u.TouchCreated(now)
+	if u.CreatedAt() != want || u.UpdatedAt() != want {
+		t.Fatalf("created %v, updated %v", u.CreatedAt(), u.UpdatedAt())
+	}
+	u.TouchUpdated(time.Now())
+	if u.UpdatedAt().Location() != time.UTC || u.UpdatedAt().Nanosecond()%1000 != 0 || u.UpdatedAt().String() != u.UpdatedAt().Round(0).String() {
+		t.Errorf("updated %v", u.UpdatedAt())
+	}
+	var s SoftDelete
+	s.MarkDeleted(now)
+	if *s.DeletedAt() != want {
+		t.Errorf("deleted %v", s.DeletedAt())
+	}
+}
