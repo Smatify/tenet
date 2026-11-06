@@ -27,6 +27,10 @@ var (
 	ErrNotEntity = orm.ErrNotEntity
 )
 
+// NewEntityFoundError reports a record reachable through an association
+// that was never stored (errors.As).
+type NewEntityFoundError = orm.NewEntityFoundError
+
 // NewEntityManager returns an entity manager for db (*dbal.DB, *dbal.Conn or *dbal.Tx).
 func NewEntityManager(db dbal.IDB, opts ...EntityManagerOption) *EntityManager {
 	return orm.New(db, opts...)

@@ -15,6 +15,7 @@ func init() {
 	Register(
 		Case{"ORM/Collections", testORMCollections},
 		Case{"ORM/GoStyleRef", testORMRef},
+		Case{"ORM/JoinTargetOfAnotherManager", testJoinTargetOfAnotherManager},
 	)
 }
 
@@ -24,6 +25,14 @@ type colAuthor struct {
 	Name         string                    `smorm:"length:50"`
 	Posts        smorm.Collection[colPost] `smorm:"oneToMany,mappedBy:Author,cascade:persist|remove,orphanRemoval,orderBy:Title,fetch:extraLazy"`
 	Tags         smorm.Collection[colTag]  `smorm:"manyToMany,inversedBy:Authors,cascade:persist,joinTable:col_author_tag"`
+}
+
+// colReader links tags without cascading: they are stored on their own.
+type colReader struct {
+	smorm.Entity `smorm:"table:col_reader"`
+	ID           int64
+	Name         string                   `smorm:"length:50"`
+	Tags         smorm.Collection[colTag] `smorm:"manyToMany,joinTable:col_reader_tag"`
 }
 
 type colPost struct {
@@ -197,4 +206,34 @@ func testORMRef(t *testing.T, db *dbal.DB) {
 		t.Fatal("Ref.Set must write the FK")
 	}
 	must(t, smorm.Load(ctx, &check.Post))
+}
+
+// testJoinTargetOfAnotherManager: a stored record that another entity
+// manager loaded is linked by its ID (it used to be left out without a
+// word); a record never stored cannot be linked.
+func testJoinTargetOfAnotherManager(t *testing.T, db *dbal.DB) {
+	ctx := context.Background()
+	newEM := setupORM(t, db, colReader{}, colAuthor{})
+	tag := &colTag{Label: "stored"}
+	first := newEM()
+	must(t, first.Persist(tag))
+	must(t, first.Flush(ctx))
+
+	second := newEM()
+	r := &colReader{Name: "ben"}
+	r.Tags.Add(tag) // tracked by the first manager only
+	must(t, second.Persist(r))
+	must(t, second.Flush(ctx))
+	if n := Count(t, db, "col_reader_tag"); n != 1 {
+		t.Fatalf("join rows = %d, want the link to the stored tag", n)
+	}
+
+	third := newEM()
+	n := &colReader{Name: "cid"}
+	n.Tags.Add(&colTag{Label: "never stored"})
+	must(t, third.Persist(n))
+	var nf *smorm.NewEntityFoundError
+	if err := third.Flush(ctx); !errors.As(err, &nf) {
+		t.Fatalf("a tag never stored: %v", err)
+	}
 }

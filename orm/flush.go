@@ -312,11 +312,17 @@ func (em *EntityManager) Flush(ctx context.Context) error {
 			i += n
 		}
 		for _, r := range joins {
-			target := em.entryOf(targetMeta(r), r.target)
-			if target == nil || target.state == StateRemoved {
+			meta := targetMeta(r)
+			target := em.entryOf(meta, r.target)
+			if target != nil && target.state == StateRemoved {
 				continue
 			}
-			if err := em.writeJoinRow(ctx, db, r, target.meta); err != nil {
+			// A target this manager does not track (loaded by another one)
+			// is linked by its ID; one without an ID was never stored.
+			if target == nil && entityKey(meta, r.target) == nil {
+				return &NewEntityFoundError{Source: r.owner.meta.Name, Assoc: r.spec.table, Target: meta.Name}
+			}
+			if err := em.writeJoinRow(ctx, db, r, meta); err != nil {
 				return wrapErr(r.owner.meta, "join table", err)
 			}
 		}
