@@ -29,7 +29,7 @@ SQLite and SQL Server pass the same test suite.
 ## Getting started
 
 ```bash
-go run github.com/smatify/tenet/gen/cmd/tenet init --dialect postgres
+go run github.com/smatify/tenet/gen/cmd/tenet@latest init --dialect postgres
 go mod tidy
 export TENET_DATABASE_URL=postgres://...
 go run ./cmd/console make:entity Post

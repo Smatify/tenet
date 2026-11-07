@@ -7,7 +7,7 @@ fixtures for you through the project console.
 ## Setting up a project
 
 ```bash
-go run github.com/smatify/tenet/gen/cmd/tenet init --dialect postgres
+go run github.com/smatify/tenet/gen/cmd/tenet@latest init --dialect postgres
 ```
 
 writes `cmd/console` (the project console), the entity package

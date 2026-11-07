@@ -1,5 +1,10 @@
 # Changelog
 
+## gen v0.1.1 (2026-11-07)
+
+- `go run github.com/smatify/tenet/gen/cmd/tenet@latest` works: the module
+  has no replace directive any more.
+
 ## v0.1.0 (2026-11-07)
 
 The first release. The API may still change before v1.0.0.

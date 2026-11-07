@@ -4,7 +4,7 @@ Entities, migrations and console of this project were generated with nothing
 but the console (the workflow test `gen/internal/e2e` repeats these steps):
 
 ```bash
-go run github.com/smatify/tenet/gen/cmd/tenet init --dialect sqlite
+go run github.com/smatify/tenet/gen/cmd/tenet@latest init --dialect sqlite
 go run ./cmd/console make:entity Post      # title, author (manyToOne -> Author.posts)
 go run ./cmd/console make:entity Author    # name (unique)
 go run ./cmd/console make:migration

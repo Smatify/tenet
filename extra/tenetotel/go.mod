@@ -19,5 +19,3 @@ require (
 	go.opentelemetry.io/otel/metric v1.47.0 // indirect
 	golang.org/x/sys v0.48.0 // indirect
 )
-
-replace github.com/smatify/tenet => ../..
