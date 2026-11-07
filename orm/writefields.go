@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/smatify/smorm/dbal"
-	"github.com/smatify/smorm/mapping"
+	"github.com/smatify/tenet/dbal"
+	"github.com/smatify/tenet/mapping"
 )
 
 // WriteFields writes the current values of the named fields of a managed

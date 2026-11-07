@@ -1,11 +1,11 @@
-package smorm
+package tenet
 
 import (
 	"context"
 	"reflect"
 
-	"github.com/smatify/smorm/dbal"
-	"github.com/smatify/smorm/orm"
+	"github.com/smatify/tenet/dbal"
+	"github.com/smatify/tenet/orm"
 )
 
 // EntityManager tracks entities and writes changes on Flush.

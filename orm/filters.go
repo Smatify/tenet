@@ -5,8 +5,8 @@ import (
 	"slices"
 	"time"
 
-	"github.com/smatify/smorm/dbal"
-	"github.com/smatify/smorm/mapping"
+	"github.com/smatify/tenet/dbal"
+	"github.com/smatify/tenet/mapping"
 )
 
 // Filter adds a condition to every query that loads entities, like

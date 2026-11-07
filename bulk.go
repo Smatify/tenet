@@ -1,11 +1,11 @@
-package smorm
+package tenet
 
 import (
 	"context"
 	"reflect"
 
-	"github.com/smatify/smorm/dbal"
-	"github.com/smatify/smorm/orm"
+	"github.com/smatify/tenet/dbal"
+	"github.com/smatify/tenet/orm"
 )
 
 // UpdateQuery changes many rows of T in one statement (see Update).
@@ -13,7 +13,7 @@ type UpdateQuery[T any] struct{ u *orm.Update }
 
 // Update starts a bulk update of T (alias "t0"), e.g.
 //
-//	smorm.Update[Thread](em).Set("PostCount", smorm.Raw("{PostCount} + 1")).Where(smorm.Eq("ID", id)).Exec(ctx)
+//	tenet.Update[Thread](em).Set("PostCount", tenet.Raw("{PostCount} + 1")).Where(tenet.Eq("ID", id)).Exec(ctx)
 //
 // It bypasses the unit of work: loaded entities keep their values; hooks,
 // versions and timestamps are not touched. Listeners get EventPostBulk with
@@ -60,7 +60,7 @@ type Selection interface{ ormQuery() *orm.Query }
 // Insert starts a bulk insert of T (alias "t0"): entities (Rows) or the
 // rows of a query (Select), optionally an upsert, e.g.
 //
-//	smorm.Insert[Read](em).Rows(r).OnConflict("User", "Thread").Set("ReadAt", smorm.Raw("GREATEST({ReadAt}, {excluded.ReadAt})")).Exec(ctx)
+//	tenet.Insert[Read](em).Rows(r).OnConflict("User", "Thread").Set("ReadAt", tenet.Raw("GREATEST({ReadAt}, {excluded.ReadAt})")).Exec(ctx)
 //
 // It bypasses the unit of work: the entities are not managed afterwards and
 // hooks do not run; IDs and timestamps are assigned as on a flush.

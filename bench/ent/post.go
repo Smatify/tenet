@@ -8,8 +8,8 @@ import (
 
 	"entgo.io/ent"
 	"entgo.io/ent/dialect/sql"
-	"github.com/smatify/smorm/bench/ent/author"
-	"github.com/smatify/smorm/bench/ent/post"
+	"github.com/smatify/tenet/bench/ent/author"
+	"github.com/smatify/tenet/bench/ent/post"
 )
 
 // Post is the model entity for the Post schema.

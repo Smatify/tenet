@@ -5,7 +5,7 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/smatify/smorm/internal/brand"
+	"github.com/smatify/tenet/internal/brand"
 )
 
 type scalar struct {

@@ -12,13 +12,13 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/smatify/smorm/gen/astedit"
-	"github.com/smatify/smorm/internal/brand"
-	"github.com/smatify/smorm/mapping"
+	"github.com/smatify/tenet/gen/astedit"
+	"github.com/smatify/tenet/internal/brand"
+	"github.com/smatify/tenet/mapping"
 )
 
 // mappedField is an unexported mapped field of an entity struct (not the
-// identifier or the version, which smorm sets itself).
+// identifier or the version, which tenet sets itself).
 type mappedField struct {
 	entity, name, typ string
 	tag               mapping.Tag

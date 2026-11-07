@@ -1,6 +1,6 @@
-package smorm
+package tenet
 
-import "github.com/smatify/smorm/internal/entity"
+import "github.com/smatify/tenet/internal/entity"
 
 type Entity = entity.Header
 

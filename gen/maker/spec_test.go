@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/smatify/smorm/gen"
+	"github.com/smatify/tenet/gen"
 )
 
 // tempModule creates a module that uses the local core module.
@@ -110,7 +110,7 @@ func TestApplyDoctrineStyleCompilesAndMaps(t *testing.T) {
 	}
 	post, _ := os.ReadFile(filepath.Join(entDir, "post.go"))
 	for _, want := range []string{"func (p *Post) Title() string", "func (p *Post) SetAuthor(v *Author) *Post", "func (p *Post) AddTag(item *Tag) *Post",
-		"publishedAt *time.Time", "title       string `" + "smorm" + ":\"length:200\"`"} {
+		"publishedAt *time.Time", "title       string `" + "tenet" + ":\"length:200\"`"} {
 		if !strings.Contains(norm(string(post)), norm(want)) {
 			t.Errorf("post.go misses %q:\n%s", want, post)
 		}
@@ -148,7 +148,7 @@ func TestApplyGoStyle(t *testing.T) {
 	}
 	goCmd(t, dir, "vet", "./...")
 	src, _ := os.ReadFile(filepath.Join(entDir, "order.go"))
-	for _, want := range []string{"ID       uuid.UUID", "Customer " + "smorm" + ".Ref[Customer]", "Number   string"} {
+	for _, want := range []string{"ID       uuid.UUID", "Customer " + "tenet" + ".Ref[Customer]", "Number   string"} {
 		if !strings.Contains(norm(string(src)), norm(want)) {
 			t.Errorf("order.go misses %q:\n%s", want, src)
 		}
@@ -269,13 +269,13 @@ func TestApplyRelationOptions(t *testing.T) {
 	player, _ := os.ReadFile(filepath.Join(entDir, "player.go"))
 	for src, wants := range map[string][]string{string(team): {
 		"// Team is a group of players.",
-		`smorm:"oneToMany,mappedBy:team,cascade:persist|remove,orphanRemoval"`,
-		`smorm:"manyToMany,joinTable:team_label"`,
-		`smorm:"manyToOne,onDelete:set_null"`,
+		`tenet:"oneToMany,mappedBy:team,cascade:persist|remove,orphanRemoval"`,
+		`tenet:"manyToMany,joinTable:team_label"`,
+		`tenet:"manyToOne,onDelete:set_null"`,
 		"func (t *Team) SetPlayers(items []*Player) *Team",
 		"func (t *Team) SetLabels(items []*Label) *Team",
 	}, string(player): {
-		`smorm:"manyToOne,inversedBy:players,notnull,onDelete:cascade"`,
+		`tenet:"manyToOne,inversedBy:players,notnull,onDelete:cascade"`,
 	}} {
 		for _, want := range wants {
 			if !strings.Contains(src, want) {

@@ -4,9 +4,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/smatify/smorm/dbal"
-	"github.com/smatify/smorm/dialect"
-	"github.com/smatify/smorm/mapping"
+	"github.com/smatify/tenet/dbal"
+	"github.com/smatify/tenet/dialect"
+	"github.com/smatify/tenet/mapping"
 )
 
 func TestFilters(t *testing.T) {

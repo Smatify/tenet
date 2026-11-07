@@ -1,6 +1,6 @@
 // Package entity holds the header embedded in every entity. It lives in an
-// internal package so only smorm can touch its state; the root package
-// re-exports it as smorm.Entity.
+// internal package so only tenet can touch its state; the root package
+// re-exports it as tenet.Entity.
 package entity
 
 // Header marks a struct as an entity and carries per-instance ORM state

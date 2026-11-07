@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/smatify/smorm/internal/entity"
+	"github.com/smatify/tenet/internal/entity"
 )
 
 func TestComposedAccessor(t *testing.T) {
@@ -115,7 +115,7 @@ func TestStaleGenerated(t *testing.T) {
 type foreignEmbed struct {
 	entity.Header
 	ID        int64
-	time.Time `smorm:"column:ts"`
+	time.Time `tenet:"column:ts"`
 }
 
 func TestAccessible(t *testing.T) {

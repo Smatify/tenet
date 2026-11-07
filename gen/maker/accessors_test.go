@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/smatify/smorm/gen"
+	"github.com/smatify/tenet/gen"
 )
 
 func TestAccessorsForHandWrittenFields(t *testing.T) {
@@ -18,35 +18,35 @@ func TestAccessorsForHandWrittenFields(t *testing.T) {
 	}
 	src := `package entity
 
-import "github.com/smatify/smorm"
+import "github.com/smatify/tenet"
 
 type Team struct {
-	smorm.Entity
-	smorm.UUIDID
-	title   string                    ` + "`smorm:\"length:50\"`" + `
-	players smorm.Collection[Player]  ` + "`smorm:\"oneToMany,mappedBy:team\"`" + `
-	cache   string                    ` + "`smorm:\"-\"`" + `
-	members smorm.Collection[Player]  ` + "`smorm:\"manyToMany\"`" + `
+	tenet.Entity
+	tenet.UUIDID
+	title   string                    ` + "`tenet:\"length:50\"`" + `
+	players tenet.Collection[Player]  ` + "`tenet:\"oneToMany,mappedBy:team\"`" + `
+	cache   string                    ` + "`tenet:\"-\"`" + `
+	members tenet.Collection[Player]  ` + "`tenet:\"manyToMany\"`" + `
 }
 
 // Title is written by hand and kept; so are the members, whose getter
 // exists (no SetMembers is added).
-func (t *Team) Members() []*Player { smorm.Touch(t); return t.members.All() }
+func (t *Team) Members() []*Player { tenet.Touch(t); return t.members.All() }
 
 // Title is written by hand and kept.
-func (t *Team) Title() string { smorm.Touch(t); return "team " + t.title }
+func (t *Team) Title() string { tenet.Touch(t); return "team " + t.title }
 
 type Player struct {
-	smorm.Entity
-	smorm.UUIDID
-	team    *Team ` + "`smorm:\"manyToOne,inversedBy:players\"`" + `
-	version int32 ` + "`smorm:\"version\"`" + `
-	tags    smorm.Collection[Tag] ` + "`smorm:\"manyToMany\"`" + `
+	tenet.Entity
+	tenet.UUIDID
+	team    *Team ` + "`tenet:\"manyToOne,inversedBy:players\"`" + `
+	version int32 ` + "`tenet:\"version\"`" + `
+	tags    tenet.Collection[Tag] ` + "`tenet:\"manyToMany\"`" + `
 }
 
 type Tag struct {
-	smorm.Entity
-	smorm.UUIDID
+	tenet.Entity
+	tenet.UUIDID
 }
 `
 	if err := os.WriteFile(filepath.Join(entDir, "team.go"), []byte(src), 0o644); err != nil {
@@ -72,7 +72,7 @@ type Tag struct {
 	goCmd(t, dir, "vet", "./...")
 	out, _ := os.ReadFile(filepath.Join(entDir, "team.go"))
 	for _, s := range []string{`return "team " + t.title`, "item.SetTeam(t)", "if item.Team() == t {", "\tp.tags.Remove(item)\n\treturn p",
-		"import (\n\t\"slices\"\n\n\t\"github.com/smatify/smorm\"\n)"} {
+		"import (\n\t\"slices\"\n\n\t\"github.com/smatify/tenet\"\n)"} {
 		if !strings.Contains(string(out), s) {
 			t.Errorf("team.go misses %q:\n%s", s, out)
 		}
@@ -92,18 +92,18 @@ func TestAccessorsOtherSide(t *testing.T) {
 	}
 	src := `package entity
 
-import "github.com/smatify/smorm"
+import "github.com/smatify/tenet"
 
 type Game struct {
-	smorm.Entity
-	smorm.UUIDID
-	halves smorm.Collection[Half] ` + "`smorm:\"oneToMany,mappedBy:game\"`" + `
+	tenet.Entity
+	tenet.UUIDID
+	halves tenet.Collection[Half] ` + "`tenet:\"oneToMany,mappedBy:game\"`" + `
 }
 
 type Half struct {
-	smorm.Entity
-	smorm.UUIDID
-	game  *Game ` + "`smorm:\"manyToOne,inversedBy:halves\"`" + `
+	tenet.Entity
+	tenet.UUIDID
+	game  *Game ` + "`tenet:\"manyToOne,inversedBy:halves\"`" + `
 	score int32
 }
 `

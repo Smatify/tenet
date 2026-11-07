@@ -5,14 +5,14 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/smatify/smorm"
-	"github.com/smatify/smorm/dbal"
-	"github.com/smatify/smorm/mapping"
+	"github.com/smatify/tenet"
+	"github.com/smatify/tenet/dbal"
+	"github.com/smatify/tenet/mapping"
 )
 
 type ormNoTable struct {
-	smorm.Entity `smorm:"table:orm_no_table"`
-	smorm.UUIDID
+	tenet.Entity `tenet:"table:orm_no_table"`
+	tenet.UUIDID
 }
 
 func init() {
@@ -20,15 +20,15 @@ func init() {
 }
 
 type ormHooked struct {
-	smorm.Entity `smorm:"table:orm_hooked"`
+	tenet.Entity `tenet:"table:orm_hooked"`
 	ID           int64
-	Title        string `smorm:"length:100"`
-	Slug         string `smorm:"length:100"`
-	loads        int    `smorm:"-"`
+	Title        string `tenet:"length:100"`
+	Slug         string `tenet:"length:100"`
+	loads        int    `tenet:"-"`
 }
 
 func (h *ormHooked) PrePersist(context.Context) error { h.Slug = strings.ToLower(h.Title); return nil }
-func (h *ormHooked) PreUpdate(_ context.Context, cs *smorm.ChangeSet) error {
+func (h *ormHooked) PreUpdate(_ context.Context, cs *tenet.ChangeSet) error {
 	if cs.Has("Title") {
 		h.Slug = strings.ToLower(h.Title)
 	}
@@ -39,32 +39,32 @@ func (h *ormHooked) PostLoad(context.Context) error { h.loads++; return nil }
 func testORMEvents(t *testing.T, db *dbal.DB) {
 	ctx := context.Background()
 	newEM := setupORM(t, db, ormHooked{})
-	events := smorm.NewEventManager()
-	counts := map[smorm.Event]int{}
-	events.On(func(_ context.Context, a *smorm.EventArgs) error {
-		counts[smorm.EventPostPersist]++
+	events := tenet.NewEventManager()
+	counts := map[tenet.Event]int{}
+	events.On(func(_ context.Context, a *tenet.EventArgs) error {
+		counts[tenet.EventPostPersist]++
 		return nil
-	}, smorm.EventPostPersist)
-	events.On(func(_ context.Context, a *smorm.EventArgs) error {
-		counts[smorm.EventPostFlush]++
+	}, tenet.EventPostPersist)
+	events.On(func(_ context.Context, a *tenet.EventArgs) error {
+		counts[tenet.EventPostFlush]++
 		return nil
-	}, smorm.EventPostFlush)
+	}, tenet.EventPostFlush)
 	em := newEM()
-	em2 := smorm.NewEntityManager(db, smorm.WithRegistry(em.Registry()), smorm.WithEvents(events))
+	em2 := tenet.NewEntityManager(db, tenet.WithRegistry(em.Registry()), tenet.WithEvents(events))
 	h := &ormHooked{Title: "Hello World"}
 	must(t, em2.Persist(h))
 	must(t, em2.Flush(ctx))
-	if counts[smorm.EventPostPersist] != 1 || counts[smorm.EventPostFlush] != 1 {
+	if counts[tenet.EventPostPersist] != 1 || counts[tenet.EventPostFlush] != 1 {
 		t.Fatalf("counts = %v", counts)
 	}
-	loaded, err := smorm.Find[ormHooked](ctx, newEM(), h.ID)
+	loaded, err := tenet.Find[ormHooked](ctx, newEM(), h.ID)
 	must(t, err)
 	if loaded.Slug != "hello world" || loaded.loads != 1 {
 		t.Fatalf("loaded = %+v", loaded)
 	}
 	h.Title = "Changed"
 	must(t, em2.Flush(ctx))
-	again, err := smorm.Find[ormHooked](ctx, newEM(), h.ID)
+	again, err := tenet.Find[ormHooked](ctx, newEM(), h.ID)
 	must(t, err)
 	if again.Slug != "changed" {
 		t.Fatalf("PreUpdate change not written: %+v", again)
@@ -76,23 +76,23 @@ func testORMEvents(t *testing.T, db *dbal.DB) {
 func testORMPostFlushAfterCommit(t *testing.T, db *dbal.DB) {
 	ctx := context.Background()
 	newEM := setupORM(t, db, ormHooked{})
-	events := smorm.NewEventManager()
+	events := tenet.NewEventManager()
 	var log []string
-	events.On(func(_ context.Context, a *smorm.EventArgs) error {
+	events.On(func(_ context.Context, a *tenet.EventArgs) error {
 		log = append(log, "postPersist")
 		return nil
-	}, smorm.EventPostPersist)
-	events.On(func(_ context.Context, a *smorm.EventArgs) error {
+	}, tenet.EventPostPersist)
+	events.On(func(_ context.Context, a *tenet.EventArgs) error {
 		log = append(log, "postFlush")
 		return nil
-	}, smorm.EventPostFlush)
-	events.On(func(_ context.Context, a *smorm.EventArgs) error {
+	}, tenet.EventPostFlush)
+	events.On(func(_ context.Context, a *tenet.EventArgs) error {
 		log = append(log, "onRollback")
 		return nil
-	}, smorm.EventOnRollback)
+	}, tenet.EventOnRollback)
 	reg := newEM().Registry()
-	em := smorm.NewEntityManager(db, smorm.WithRegistry(reg), smorm.WithEvents(events))
-	must(t, em.Transactional(ctx, func(ctx context.Context, em *smorm.EntityManager) error {
+	em := tenet.NewEntityManager(db, tenet.WithRegistry(reg), tenet.WithEvents(events))
+	must(t, em.Transactional(ctx, func(ctx context.Context, em *tenet.EntityManager) error {
 		must(t, em.Persist(&ormHooked{Title: "a"}))
 		must(t, em.Flush(ctx))
 		must(t, em.Persist(&ormHooked{Title: "b"}))
@@ -104,7 +104,7 @@ func testORMPostFlushAfterCommit(t *testing.T, db *dbal.DB) {
 	}
 
 	log = nil
-	err := em.Transactional(ctx, func(ctx context.Context, em *smorm.EntityManager) error {
+	err := em.Transactional(ctx, func(ctx context.Context, em *tenet.EntityManager) error {
 		must(t, em.Persist(&ormHooked{Title: "c"}))
 		must(t, em.Flush(ctx))
 		return context.Canceled
@@ -116,7 +116,7 @@ func testORMPostFlushAfterCommit(t *testing.T, db *dbal.DB) {
 	log = nil
 	missing := mapping.NewRegistry() // its table does not exist
 	must(t, missing.Register(ormNoTable{}))
-	failing := smorm.NewEntityManager(db, smorm.WithRegistry(missing), smorm.WithEvents(events))
+	failing := tenet.NewEntityManager(db, tenet.WithRegistry(missing), tenet.WithEvents(events))
 	must(t, failing.Persist(&ormNoTable{}))
 	if err := failing.Flush(ctx); err == nil || strings.Join(log, ",") != "onRollback" {
 		t.Fatalf("failed flush: %v %v", err, log)

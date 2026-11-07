@@ -6,7 +6,7 @@ import (
 	"reflect"
 	"time"
 
-	"github.com/smatify/smorm"
+	"github.com/smatify/tenet"
 )
 
 // List is a minimal collection container.
@@ -17,37 +17,37 @@ func (List[T]) CollectionElem() reflect.Type { return reflect.TypeFor[T]() }
 
 // Author uses the Go style with exported fields.
 type Author struct {
-	smorm.Entity `smorm:"table:authors"`
+	tenet.Entity `tenet:"table:authors"`
 	ID           int64
-	Email        string `smorm:"length:180,unique"`
+	Email        string `tenet:"length:180,unique"`
 	Nick         sql.NullString
 	Born         *time.Time
 	Prefs        map[string]any
-	Address      Address    `smorm:"embedded,prefix:addr_"`
-	Posts        List[Post] `smorm:"oneToMany,mappedBy:author"`
-	cache        int        `smorm:"-"`
+	Address      Address    `tenet:"embedded,prefix:addr_"`
+	Posts        List[Post] `tenet:"oneToMany,mappedBy:author"`
+	cache        int        `tenet:"-"`
 }
 
 // Post uses the Doctrine style with unexported fields and traits.
 type Post struct {
-	smorm.Entity
-	smorm.UUIDID
-	smorm.Timestamps
-	title  string  `smorm:"length:200"`
-	author *Author `smorm:"manyToOne,inversedBy:Posts"`
-	meta   Meta    `smorm:"type:json"`
+	tenet.Entity
+	tenet.UUIDID
+	tenet.Timestamps
+	title  string  `tenet:"length:200"`
+	author *Author `tenet:"manyToOne,inversedBy:Posts"`
+	meta   Meta    `tenet:"type:json"`
 }
 
 // Content is the root of a single table hierarchy.
 type Content struct {
-	smorm.Entity `smorm:"inheritance:single"`
+	tenet.Entity `tenet:"inheritance:single"`
 	ID           int64
 	Title        string
 }
 
 // Video is a subclass of Content.
 type Video struct {
-	Content `smorm:"discriminatorValue:video"`
+	Content `tenet:"discriminatorValue:video"`
 	Seconds int
 }
 

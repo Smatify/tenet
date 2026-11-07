@@ -5,37 +5,37 @@ import (
 	"testing"
 	"time"
 
-	"github.com/smatify/smorm/dbal"
-	"github.com/smatify/smorm/internal/entity"
-	"github.com/smatify/smorm/mapping"
-	"github.com/smatify/smorm/schema"
-	"github.com/smatify/smorm/uuid"
+	"github.com/smatify/tenet/dbal"
+	"github.com/smatify/tenet/internal/entity"
+	"github.com/smatify/tenet/mapping"
+	"github.com/smatify/tenet/schema"
+	"github.com/smatify/tenet/uuid"
 )
 
 func init() { Register(Case{"Mapping/SchemaFromEntities", testMappingSchema}) }
 
 type mapAuthor struct {
-	entity.Header `smorm:"table:map_author"`
+	entity.Header `tenet:"table:map_author"`
 	ID            int64
-	Email         string `smorm:"length:180,unique"`
-	Name          string `smorm:"default:'anon'"`
+	Email         string `tenet:"length:180,unique"`
+	Name          string `tenet:"default:'anon'"`
 	Born          *time.Time
 	Prefs         map[string]any
-	Posts         []*mapPost `smorm:"oneToMany,mappedBy:author"`
-	Tags          []*mapTag  `smorm:"manyToMany,joinTable:map_author_tag"`
+	Posts         []*mapPost `tenet:"oneToMany,mappedBy:author"`
+	Tags          []*mapTag  `tenet:"manyToMany,joinTable:map_author_tag"`
 }
 
 type mapPost struct {
-	entity.Header `smorm:"table:map_post"`
-	id            uuid.UUID  `smorm:"id"`
-	title         string     `smorm:"length:200,index"`
-	author        *mapAuthor `smorm:"manyToOne,inversedBy:Posts,notnull,onDelete:cascade"`
+	entity.Header `tenet:"table:map_post"`
+	id            uuid.UUID  `tenet:"id"`
+	title         string     `tenet:"length:200,index"`
+	author        *mapAuthor `tenet:"manyToOne,inversedBy:Posts,notnull,onDelete:cascade"`
 }
 
 type mapTag struct {
-	entity.Header `smorm:"table:map_tag"`
+	entity.Header `tenet:"table:map_tag"`
 	ID            int32
-	Label         string `smorm:"length:50,unique"`
+	Label         string `tenet:"length:50,unique"`
 }
 
 func testMappingSchema(t *testing.T, db *dbal.DB) {

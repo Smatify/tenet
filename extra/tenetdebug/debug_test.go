@@ -1,4 +1,4 @@
-package smormdebug
+package tenetdebug
 
 import (
 	"bytes"
@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/smatify/smorm/dbal"
-	"github.com/smatify/smorm/internal/brand"
+	"github.com/smatify/tenet/dbal"
+	"github.com/smatify/tenet/internal/brand"
 )
 
 func run(h *QueryHook, ev *dbal.QueryEvent) {

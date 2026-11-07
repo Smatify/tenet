@@ -1,4 +1,4 @@
-package smormotel
+package tenetotel
 
 import (
 	"context"
@@ -11,10 +11,10 @@ import (
 	"go.opentelemetry.io/otel/sdk/trace/tracetest"
 	"go.opentelemetry.io/otel/trace"
 
-	"github.com/smatify/smorm/dbal"
-	"github.com/smatify/smorm/dialect"
-	"github.com/smatify/smorm/internal/fakedb"
-	"github.com/smatify/smorm/internal/testdialect"
+	"github.com/smatify/tenet/dbal"
+	"github.com/smatify/tenet/dialect"
+	"github.com/smatify/tenet/internal/fakedb"
+	"github.com/smatify/tenet/internal/testdialect"
 )
 
 func setup(t *testing.T, opts ...Option) (*dbal.DB, *fakedb.Recorder, *tracetest.SpanRecorder) {

@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/smatify/smorm/dialect"
+	"github.com/smatify/tenet/dialect"
 )
 
 // Tx is a database transaction. Calling BeginTx or RunInTx on a Tx starts a

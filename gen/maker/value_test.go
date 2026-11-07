@@ -8,8 +8,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/smatify/smorm/console"
-	"github.com/smatify/smorm/gen"
+	"github.com/smatify/tenet/console"
+	"github.com/smatify/tenet/gen"
 )
 
 const valueCheck = `package main

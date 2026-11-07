@@ -8,14 +8,14 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/smatify/smorm"
-	"github.com/smatify/smorm/dbal"
+	"github.com/smatify/tenet"
+	"github.com/smatify/tenet/dbal"
 )
 
 func init() { Register(Case{"ORM/LazyLoadingAndBatching", testORMLazy}) }
 
 // Name is a Doctrine style getter: it loads the author on first access.
-func (a *ormAuthor) Name() string { smorm.Touch(a); return a.name }
+func (a *ormAuthor) Name() string { tenet.Touch(a); return a.name }
 
 func testORMLazy(t *testing.T, db *dbal.DB) {
 	ctx := context.Background()
@@ -37,10 +37,10 @@ func testORMLazy(t *testing.T, db *dbal.DB) {
 			authorSelects++
 		}
 	}})
-	em2 := smorm.NewEntityManager(db, smorm.WithRegistry(em.Registry()), smorm.WithContext(ctx))
+	em2 := tenet.NewEntityManager(db, tenet.WithRegistry(em.Registry()), tenet.WithContext(ctx))
 	var loaded []*ormBook
 	for _, b := range books {
-		lb, err := smorm.Find[ormBook](ctx, em2, b.ID())
+		lb, err := tenet.Find[ormBook](ctx, em2, b.ID())
 		must(t, err)
 		loaded = append(loaded, lb)
 	}
@@ -57,28 +57,28 @@ func testORMLazy(t *testing.T, db *dbal.DB) {
 
 	// Explicit loading returns errors instead of panicking.
 	em3 := newEM()
-	ref, err := smorm.Reference[ormAuthor](em3, int64(987654))
+	ref, err := tenet.Reference[ormAuthor](em3, int64(987654))
 	must(t, err)
-	if err := smorm.Load(ctx, ref); !errors.Is(err, smorm.ErrNotFound) {
+	if err := tenet.Load(ctx, ref); !errors.Is(err, tenet.ErrNotFound) {
 		t.Fatalf("Load missing = %v", err)
 	}
-	err = smorm.CatchLazy(func() error { _ = ref.Name(); return nil })
-	var le *smorm.LazyLoadError
-	if !errors.As(err, &le) || !errors.Is(err, smorm.ErrNotFound) {
+	err = tenet.CatchLazy(func() error { _ = ref.Name(); return nil })
+	var le *tenet.LazyLoadError
+	if !errors.As(err, &le) || !errors.Is(err, tenet.ErrNotFound) {
 		t.Fatalf("CatchLazy = %v", err)
 	}
 
 	// Detached references cannot load.
 	em4 := newEM()
-	lb, err := smorm.Find[ormBook](ctx, em4, books[0].ID())
+	lb, err := tenet.Find[ormBook](ctx, em4, books[0].ID())
 	must(t, err)
 	em4.Clear()
-	err = smorm.CatchLazy(func() error { _ = lb.author.Name(); return nil })
-	if !errors.Is(err, smorm.ErrDetached) {
+	err = tenet.CatchLazy(func() error { _ = lb.author.Name(); return nil })
+	if !errors.Is(err, tenet.ErrDetached) {
 		t.Fatalf("detached = %v", err)
 	}
 	// The middleware turns the panic into a response.
-	h := smorm.RecoverLazyLoad(http.HandlerFunc(func(http.ResponseWriter, *http.Request) { _ = lb.author.Name() }), nil)
+	h := tenet.RecoverLazyLoad(http.HandlerFunc(func(http.ResponseWriter, *http.Request) { _ = lb.author.Name() }), nil)
 	rr := httptest.NewRecorder()
 	h.ServeHTTP(rr, httptest.NewRequest("GET", "/", nil))
 	if rr.Code != http.StatusInternalServerError {

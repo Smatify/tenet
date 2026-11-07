@@ -9,10 +9,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/smatify/smorm/dbal"
-	"github.com/smatify/smorm/internal/brand"
-	"github.com/smatify/smorm/schema"
-	"github.com/smatify/smorm/types"
+	"github.com/smatify/tenet/dbal"
+	"github.com/smatify/tenet/internal/brand"
+	"github.com/smatify/tenet/schema"
+	"github.com/smatify/tenet/types"
 )
 
 // ErrLocked is returned when another process holds the migration lock.

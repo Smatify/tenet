@@ -7,10 +7,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/smatify/smorm/dbal"
-	"github.com/smatify/smorm/internal/fakedb"
-	"github.com/smatify/smorm/internal/testdialect"
-	"github.com/smatify/smorm/migrations"
+	"github.com/smatify/tenet/dbal"
+	"github.com/smatify/tenet/internal/fakedb"
+	"github.com/smatify/tenet/internal/testdialect"
+	"github.com/smatify/tenet/migrations"
 )
 
 func testApp(input string) (*App, *bytes.Buffer, *bytes.Buffer) {

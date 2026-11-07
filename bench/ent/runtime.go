@@ -3,9 +3,9 @@
 package ent
 
 import (
-	"github.com/smatify/smorm/bench/ent/author"
-	"github.com/smatify/smorm/bench/ent/post"
-	"github.com/smatify/smorm/bench/ent/schema"
+	"github.com/smatify/tenet/bench/ent/author"
+	"github.com/smatify/tenet/bench/ent/post"
+	"github.com/smatify/tenet/bench/ent/schema"
 )
 
 // The init function reads all schema descriptors with runtime code

@@ -12,7 +12,7 @@ import (
 	"reflect"
 	"sync"
 
-	"github.com/smatify/smorm/dialect"
+	"github.com/smatify/tenet/dialect"
 )
 
 // Name identifies a type in mapping tags, e.g. `type:json`.

@@ -10,10 +10,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/smatify/smorm/internal/entity"
-	"github.com/smatify/smorm/schema"
-	"github.com/smatify/smorm/types"
-	"github.com/smatify/smorm/uuid"
+	"github.com/smatify/tenet/internal/entity"
+	"github.com/smatify/tenet/schema"
+	"github.com/smatify/tenet/types"
+	"github.com/smatify/tenet/uuid"
 )
 
 type coll[T any] struct{ items []*T }
@@ -30,42 +30,42 @@ type Timestamps struct {
 }
 
 type User struct {
-	entity.Header `smorm:"table:users,comment:'people'"`
+	entity.Header `tenet:"table:users,comment:'people'"`
 	ID            int64
-	Email         string  `smorm:"length:180,unique"`
-	DisplayName   string  `smorm:"column:name,default:'anon'"`
-	Bio           *string `smorm:"type:text"`
-	Score         float64 `smorm:"nullzero"`
+	Email         string  `tenet:"length:180,unique"`
+	DisplayName   string  `tenet:"column:name,default:'anon'"`
+	Bio           *string `tenet:"type:text"`
+	Score         float64 `tenet:"nullzero"`
 	Prefs         map[string]any
 	Nick          sql.NullString
-	Lock          int `smorm:"version"`
+	Lock          int `tenet:"version"`
 	Timestamps
-	Posts   coll[Post]  `smorm:"oneToMany,mappedBy:author,cascade:persist|remove,orphanRemoval,orderBy:id"`
-	Profile *Profile    `smorm:"oneToOne,mappedBy:User"`
-	Groups  coll[Group] `smorm:"manyToMany,inversedBy:Members,cascade:all"`
-	cache   string      `smorm:"-"`
+	Posts   coll[Post]  `tenet:"oneToMany,mappedBy:author,cascade:persist|remove,orphanRemoval,orderBy:id"`
+	Profile *Profile    `tenet:"oneToOne,mappedBy:User"`
+	Groups  coll[Group] `tenet:"manyToMany,inversedBy:Members,cascade:all"`
+	cache   string      `tenet:"-"`
 }
 
 type Post struct {
 	entity.Header
-	id     uuid.UUID `smorm:"id"`
-	title  string    `smorm:"length:200,index:title_lang"`
-	lang   string    `smorm:"length:2,fixed,index:title_lang"`
-	slug   string    `smorm:"unique:uniq_slug"`
-	author *User     `smorm:"manyToOne,inversedBy:Posts,notnull,onDelete:cascade"`
-	editor ref[User] `smorm:"joinColumn:editor_user_id,fetch:eager"`
+	id     uuid.UUID `tenet:"id"`
+	title  string    `tenet:"length:200,index:title_lang"`
+	lang   string    `tenet:"length:2,fixed,index:title_lang"`
+	slug   string    `tenet:"unique:uniq_slug"`
+	author *User     `tenet:"manyToOne,inversedBy:Posts,notnull,onDelete:cascade"`
+	editor ref[User] `tenet:"joinColumn:editor_user_id,fetch:eager"`
 }
 
 type Profile struct {
 	entity.Header
 	ID   int64
-	User *User `smorm:"oneToOne,inversedBy:Profile"`
+	User *User `tenet:"oneToOne,inversedBy:Profile"`
 }
 
 type Group struct {
-	entity.Header `smorm:"sequence:group_ids"`
-	ID            int32      `smorm:"generated:sequence"`
-	Members       coll[User] `smorm:"manyToMany,mappedBy:Groups"`
+	entity.Header `tenet:"sequence:group_ids"`
+	ID            int32      `tenet:"generated:sequence"`
+	Members       coll[User] `tenet:"manyToMany,mappedBy:Groups"`
 }
 
 func TestParseUser(t *testing.T) {
@@ -250,86 +250,86 @@ type NoID struct {
 	Name string
 }
 type BadEntityOpt struct {
-	entity.Header `smorm:"tablename:x"`
+	entity.Header `tenet:"tablename:x"`
 	ID            int
 }
 type BadFieldOpt struct {
 	entity.Header
-	ID int `smorm:"colum:x"`
+	ID int `tenet:"colum:x"`
 }
 type BadTagSyntax struct {
 	entity.Header
-	ID int `smorm:"default:'x"`
+	ID int `tenet:"default:'x"`
 }
 type BadEntityTag struct {
-	entity.Header `smorm:"comment:'x"`
+	entity.Header `tenet:"comment:'x"`
 	ID            int
 }
 type UnknownType struct {
 	entity.Header
-	ID int `smorm:"type:nope"`
+	ID int `tenet:"type:nope"`
 }
 type NoInfer struct {
 	entity.Header
 	ID int
-	X  struct{ A int } `smorm:"column:x"`
+	X  struct{ A int } `tenet:"column:x"`
 }
 type BadLength struct {
 	entity.Header
 	ID int
-	S  string `smorm:"length:-1"`
+	S  string `tenet:"length:-1"`
 }
 type BadPrecision struct {
 	entity.Header
 	ID int
-	S  float64 `smorm:"precision:x"`
+	S  float64 `tenet:"precision:x"`
 }
 type BadScale struct {
 	entity.Header
 	ID int
-	S  float64 `smorm:"scale:x"`
+	S  float64 `tenet:"scale:x"`
 }
 type NullConflict struct {
 	entity.Header
 	ID int
-	S  string `smorm:"nullable,notnull"`
+	S  string `tenet:"nullable,notnull"`
 }
 type TwoIdentities struct {
 	entity.Header
 	ID     int
-	Number int64 `smorm:"generated:identity"`
+	Number int64 `tenet:"generated:identity"`
 }
 
 type GenOnNonID struct {
 	entity.Header
 	ID int
-	S  string `smorm:"generated:uuid7"`
+	S  string `tenet:"generated:uuid7"`
 }
 type BadGen struct {
 	entity.Header
-	ID int `smorm:"generated:magic"`
+	ID int `tenet:"generated:magic"`
 }
 type TwoVersions struct {
 	entity.Header
 	ID int
-	A  int `smorm:"version"`
-	B  int `smorm:"version"`
+	A  int `tenet:"version"`
+	B  int `tenet:"version"`
 }
 type MixedIndex struct {
 	entity.Header
 	ID int
-	A  int `smorm:"index:g"`
-	B  int `smorm:"unique:g"`
+	A  int `tenet:"index:g"`
+	B  int `tenet:"unique:g"`
 }
 type DupColumn struct {
 	entity.Header
 	ID int
-	A  int `smorm:"column:id"`
+	A  int `tenet:"column:id"`
 }
 type BadContainer struct {
 	entity.Header
 	ID int
-	A  map[string]*User `smorm:"manyToOne"`
+	A  map[string]*User `tenet:"manyToOne"`
 }
 type CollNoKind struct {
 	entity.Header
@@ -339,73 +339,73 @@ type CollNoKind struct {
 type ToOneInSlice struct {
 	entity.Header
 	ID    int
-	Users []*User `smorm:"manyToOne"`
+	Users []*User `tenet:"manyToOne"`
 }
 type BothSides struct {
 	entity.Header
 	ID int
-	U  *User `smorm:"oneToOne,mappedBy:a,inversedBy:b"`
+	U  *User `tenet:"oneToOne,mappedBy:a,inversedBy:b"`
 }
 type ManyToOneMapped struct {
 	entity.Header
 	ID int
-	U  *User `smorm:"manyToOne,mappedBy:Posts"`
+	U  *User `tenet:"manyToOne,mappedBy:Posts"`
 }
 type OneToManyNoMapped struct {
 	entity.Header
 	ID    int
-	Users coll[User] `smorm:"oneToMany"`
+	Users coll[User] `tenet:"oneToMany"`
 }
 type BadCascade struct {
 	entity.Header
 	ID int
-	U  *User `smorm:"cascade:explode"`
+	U  *User `tenet:"cascade:explode"`
 }
 type BadFetch struct {
 	entity.Header
 	ID int
-	U  *User `smorm:"fetch:sometimes"`
+	U  *User `tenet:"fetch:sometimes"`
 }
 type BadOrphan struct {
 	entity.Header
 	ID int
-	U  *User `smorm:"orphanRemoval"`
+	U  *User `tenet:"orphanRemoval"`
 }
 type InverseJoin struct {
 	entity.Header
 	ID int
-	U  *User `smorm:"oneToOne,mappedBy:Profile,joinColumn:x"`
+	U  *User `tenet:"oneToOne,mappedBy:Profile,joinColumn:x"`
 }
 type TargetNotEntity struct {
 	entity.Header
 	ID int
-	T  *Timestamps `smorm:"manyToOne"`
+	T  *Timestamps `tenet:"manyToOne"`
 }
 type MissingInverse struct {
 	entity.Header
 	ID int
-	U  *User `smorm:"manyToOne,inversedBy:Nope"`
+	U  *User `tenet:"manyToOne,inversedBy:Nope"`
 }
 type WrongInverseTarget struct {
 	entity.Header
 	ID int
-	U  *User `smorm:"manyToOne,inversedBy:Posts"`
+	U  *User `tenet:"manyToOne,inversedBy:Posts"`
 }
 type BadRefColumn struct {
 	entity.Header
 	ID int
-	U  *User `smorm:"referencedColumn:nope"`
+	U  *User `tenet:"referencedColumn:nope"`
 }
 type JoinCollision struct {
 	entity.Header
 	ID     int
 	UserID int
-	U      *User `smorm:"joinColumn:user_id"`
+	U      *User `tenet:"joinColumn:user_id"`
 }
 type CompositeTarget struct {
 	entity.Header
-	A int `smorm:"id"`
-	B int `smorm:"id"`
+	A int `tenet:"id"`
+	B int `tenet:"id"`
 }
 type RefComposite struct {
 	entity.Header
@@ -415,27 +415,27 @@ type RefComposite struct {
 type M2MComposite struct {
 	entity.Header
 	ID int
-	C  coll[CompositeTarget] `smorm:"manyToMany"`
+	C  coll[CompositeTarget] `tenet:"manyToMany"`
 }
 type IncompatInverse struct {
 	entity.Header
 	ID int
-	B  *IncB `smorm:"oneToOne,mappedBy:A"`
+	B  *IncB `tenet:"oneToOne,mappedBy:A"`
 }
 type IncB struct {
 	entity.Header
 	ID int
-	A  *IncompatInverse `smorm:"manyToOne"`
+	A  *IncompatInverse `tenet:"manyToOne"`
 }
 type InverseOfInverse struct {
 	entity.Header
 	ID int
-	B  *InvB `smorm:"oneToOne,mappedBy:A"`
+	B  *InvB `tenet:"oneToOne,mappedBy:A"`
 }
 type InvB struct {
 	entity.Header
 	ID int
-	A  *InverseOfInverse `smorm:"oneToOne,mappedBy:B"`
+	A  *InverseOfInverse `tenet:"oneToOne,mappedBy:B"`
 }
 
 func TestInvalidMappings(t *testing.T) {
@@ -493,7 +493,7 @@ func TestInvalidMappings(t *testing.T) {
 	if _, err := NewRegistry().Get(reflect.TypeFor[int]()); err == nil {
 		t.Fatal("non-struct")
 	}
-	if (&MappingError{Entity: "E", Msg: "m"}).Error() != "smorm: E: m" {
+	if (&MappingError{Entity: "E", Msg: "m"}).Error() != "tenet: E: m" {
 		t.Fatal("MappingError format")
 	}
 }
@@ -501,9 +501,9 @@ func TestInvalidMappings(t *testing.T) {
 type SelfRef struct {
 	entity.Header
 	ID      int64
-	Parent  *SelfRef      `smorm:"inversedBy:Children"`
-	Kids    coll[SelfRef] `smorm:"oneToMany,mappedBy:Parent"`
-	Friends coll[SelfRef] `smorm:"manyToMany"`
+	Parent  *SelfRef      `tenet:"inversedBy:Children"`
+	Kids    coll[SelfRef] `tenet:"oneToMany,mappedBy:Parent"`
+	Friends coll[SelfRef] `tenet:"manyToMany"`
 }
 
 func TestSelfReference(t *testing.T) {
@@ -520,9 +520,9 @@ func TestSelfReference(t *testing.T) {
 type Node struct {
 	entity.Header
 	ID       int64
-	Parent   *Node      `smorm:"inversedBy:Children"`
-	Children coll[Node] `smorm:"oneToMany,mappedBy:Parent"`
-	Friends  coll[Node] `smorm:"manyToMany"`
+	Parent   *Node      `tenet:"inversedBy:Children"`
+	Children coll[Node] `tenet:"oneToMany,mappedBy:Parent"`
+	Friends  coll[Node] `tenet:"manyToMany"`
 }
 
 func TestSelfReferenceValid(t *testing.T) {
@@ -541,11 +541,11 @@ func TestSelfReferenceValid(t *testing.T) {
 }
 
 type IndexedPost struct {
-	entity.Header `smorm:"index:author|CreatedAt;editor"`
+	entity.Header `tenet:"index:author|CreatedAt;editor"`
 	ID            int64
 	Timestamps
-	author *User     `smorm:"manyToOne"`
-	editor ref[User] `smorm:"joinColumn:editor_user_id"`
+	author *User     `tenet:"manyToOne"`
+	editor ref[User] `tenet:"joinColumn:editor_user_id"`
 }
 
 func TestEntityIndexes(t *testing.T) {
@@ -562,7 +562,7 @@ func TestEntityIndexes(t *testing.T) {
 		t.Fatalf("indexes = %v", got)
 	}
 	type bad struct {
-		entity.Header `smorm:"index:missing"`
+		entity.Header `tenet:"index:missing"`
 		ID            int64
 	}
 	if _, err := For[bad](NewRegistry()); err == nil || !strings.Contains(err.Error(), `unknown field "missing"`) {
@@ -571,10 +571,10 @@ func TestEntityIndexes(t *testing.T) {
 }
 
 type PendingPost struct {
-	entity.Header `smorm:"index:author|CreatedAt?{approvedAt} IS NULL AND {author} IS NOT NULL"`
+	entity.Header `tenet:"index:author|CreatedAt?{approvedAt} IS NULL AND {author} IS NOT NULL"`
 	ID            int64
 	Timestamps
-	author     *User `smorm:"manyToOne"`
+	author     *User `tenet:"manyToOne"`
 	approvedAt *time.Time
 }
 
@@ -599,7 +599,7 @@ func TestPartialEntityIndex(t *testing.T) {
 		t.Fatalf("indexes = %+v", table.Indexes)
 	}
 	type bad struct {
-		entity.Header `smorm:"index:CreatedAt?{missing} IS NULL"`
+		entity.Header `tenet:"index:CreatedAt?{missing} IS NULL"`
 		ID            int64
 		Timestamps
 	}
@@ -610,8 +610,8 @@ func TestPartialEntityIndex(t *testing.T) {
 
 type NumberedPost struct {
 	entity.Header
-	ID     uuid.UUID `smorm:"id"`
-	Number int64     `smorm:"generated:identity"`
+	ID     uuid.UUID `tenet:"id"`
+	Number int64     `tenet:"generated:identity"`
 }
 
 func TestGeneratedField(t *testing.T) {
@@ -632,12 +632,12 @@ func TestGeneratedField(t *testing.T) {
 }
 
 type IndexedComment struct {
-	entity.Header `smorm:"table:indexed_comment"`
+	entity.Header `tenet:"table:indexed_comment"`
 	ID            int64
-	module        string `smorm:"index:idx_place"`
-	author        *User  `smorm:"manyToOne,index"`
-	post          *User  `smorm:"manyToOne,index:idx_place"`
-	owner         *User  `smorm:"manyToOne,unique"`
+	module        string `tenet:"index:idx_place"`
+	author        *User  `tenet:"manyToOne,index"`
+	post          *User  `tenet:"manyToOne,index:idx_place"`
+	owner         *User  `tenet:"manyToOne,unique"`
 }
 
 func TestAssociationIndexes(t *testing.T) {
@@ -658,7 +658,7 @@ func TestAssociationIndexes(t *testing.T) {
 	type bad struct {
 		entity.Header
 		ID      int64
-		authors []*User `smorm:"oneToMany,mappedBy:x,index"`
+		authors []*User `tenet:"oneToMany,mappedBy:x,index"`
 	}
 	if _, err := For[bad](NewRegistry()); err == nil || !strings.Contains(err.Error(), "only valid on the owning side") {
 		t.Fatalf("err = %v", err)

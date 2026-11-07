@@ -6,16 +6,16 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/smatify/smorm/dialect"
-	"github.com/smatify/smorm/internal/entity"
+	"github.com/smatify/tenet/dialect"
+	"github.com/smatify/tenet/internal/entity"
 )
 
 type wDoc struct {
-	entity.Header `smorm:"table:wd"`
+	entity.Header `tenet:"table:wd"`
 	ID            int64
 	Title         string
 	Views         int64
-	Version       int64 `smorm:"version"`
+	Version       int64 `tenet:"version"`
 }
 
 func TestWriteFields(t *testing.T) {

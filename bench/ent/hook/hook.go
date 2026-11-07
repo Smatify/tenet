@@ -6,7 +6,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/smatify/smorm/bench/ent"
+	"github.com/smatify/tenet/bench/ent"
 )
 
 // The AuthorFunc type is an adapter to allow the use of ordinary

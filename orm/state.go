@@ -1,6 +1,6 @@
 // Package orm implements the entity manager and unit of work: identity map,
 // change tracking, commit ordering and hydration. Applications use it
-// through the root smorm package.
+// through the root tenet package.
 package orm
 
 import (
@@ -10,8 +10,8 @@ import (
 	"strings"
 	"weak"
 
-	"github.com/smatify/smorm/internal/brand"
-	"github.com/smatify/smorm/mapping"
+	"github.com/smatify/tenet/internal/brand"
+	"github.com/smatify/tenet/mapping"
 )
 
 // State is the lifecycle state of an entity relative to an entity manager.

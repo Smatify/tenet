@@ -6,9 +6,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/smatify/smorm"
-	"github.com/smatify/smorm/dbal"
-	"github.com/smatify/smorm/dialect"
+	"github.com/smatify/tenet"
+	"github.com/smatify/tenet/dbal"
+	"github.com/smatify/tenet/dialect"
 )
 
 func init() {
@@ -114,7 +114,7 @@ func testORMFetchJoin(t *testing.T, db *dbal.DB) {
 		}
 	}})
 	em = newEM()
-	books, err := smorm.NewQuery[ormBook](em).With("author", "editor").OrderBy("title", smorm.Asc).All(ctx)
+	books, err := tenet.NewQuery[ormBook](em).With("author", "editor").OrderBy("title", tenet.Asc).All(ctx)
 	must(t, err)
 	if selects != 1 {
 		t.Fatalf("selects = %d, want 1", selects)

@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/smatify/smorm/dialect"
-	"github.com/smatify/smorm/internal/entity"
+	"github.com/smatify/tenet/dialect"
+	"github.com/smatify/tenet/internal/entity"
 )
 
 func panicErr(fn func()) (err error) {
@@ -124,7 +124,7 @@ func TestWithoutLazyLoading(t *testing.T) {
 	if !errors.Is(err, ErrLazyLoadingDisabled) || !strings.Contains(err.Error(), "With(") {
 		t.Fatalf("touch = %v", err)
 	}
-	// Caller skips smorm frames, which includes this test.
+	// Caller skips tenet frames, which includes this test.
 	if len(loads) != 1 || loads[0].Entity != "qAuthor" || loads[0].ID != int64(1) || loads[0].Caller.Function != "testing.tRunner" {
 		t.Fatalf("hook = %+v", loads)
 	}

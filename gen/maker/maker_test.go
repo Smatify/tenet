@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/smatify/smorm/console"
+	"github.com/smatify/tenet/console"
 )
 
 func TestRegisterAndGenerate(t *testing.T) {

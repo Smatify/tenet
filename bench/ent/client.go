@@ -9,14 +9,14 @@ import (
 	"log"
 	"reflect"
 
-	"github.com/smatify/smorm/bench/ent/migrate"
+	"github.com/smatify/tenet/bench/ent/migrate"
 
 	"entgo.io/ent"
 	"entgo.io/ent/dialect"
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
-	"github.com/smatify/smorm/bench/ent/author"
-	"github.com/smatify/smorm/bench/ent/post"
+	"github.com/smatify/tenet/bench/ent/author"
+	"github.com/smatify/tenet/bench/ent/post"
 )
 
 // Client is the client that holds all ent builders.

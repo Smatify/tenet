@@ -1,4 +1,4 @@
-// Package bench compares smorm with GORM, bun, ent and sqlc on Postgres
+// Package bench compares tenet with GORM, bun, ent and sqlc on Postgres
 // (started with testcontainers unless $<PREFIX>PG_DSN is set):
 //
 //	GOWORK=off go test -run '^$' -bench . -benchmem
@@ -16,7 +16,7 @@ import (
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/modules/postgres"
 
-	"github.com/smatify/smorm/internal/brand"
+	"github.com/smatify/tenet/internal/brand"
 )
 
 // impl is one library under test. Every function works on a fresh unit of

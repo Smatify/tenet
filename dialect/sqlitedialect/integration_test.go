@@ -6,8 +6,8 @@ import (
 
 	_ "modernc.org/sqlite"
 
-	"github.com/smatify/smorm/dbal"
-	"github.com/smatify/smorm/dbtest"
+	"github.com/smatify/tenet/dbal"
+	"github.com/smatify/tenet/dbtest"
 )
 
 // openTestDB opens a fresh file-backed SQLite database.

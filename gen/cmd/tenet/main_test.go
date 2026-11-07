@@ -3,7 +3,7 @@ package main
 import (
 	"bytes"
 
-	"github.com/smatify/smorm/internal/brand"
+	"github.com/smatify/tenet/internal/brand"
 	"os"
 	"path/filepath"
 	"strings"

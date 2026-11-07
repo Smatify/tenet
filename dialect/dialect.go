@@ -50,7 +50,7 @@ const (
 // Has reports whether all of the given features are set.
 func (f Feature) Has(other Feature) bool { return f&other == other }
 
-// Dialect is the database specific part of smorm.
+// Dialect is the database specific part of tenet.
 type Dialect interface {
 	// Name returns the dialect name.
 	Name() Name

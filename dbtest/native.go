@@ -6,22 +6,22 @@ import (
 	"testing"
 	"time"
 
-	"github.com/smatify/smorm"
-	"github.com/smatify/smorm/dbal"
-	"github.com/smatify/smorm/uuid"
+	"github.com/smatify/tenet"
+	"github.com/smatify/tenet/dbal"
+	"github.com/smatify/tenet/uuid"
 )
 
 func init() { Register(Case{"ORM/NativeQueries", testNative}) }
 
 type nqItem struct {
-	smorm.Entity `smorm:"table:nq_item"`
+	tenet.Entity `tenet:"table:nq_item"`
 	ID           int64
-	Name         string `smorm:"length:30"`
+	Name         string `tenet:"length:30"`
 	Active       bool
 	Price        float64
 	Made         time.Time
 	Ref          uuid.UUID
-	Meta         map[string]any `smorm:"nullable"`
+	Meta         map[string]any `tenet:"nullable"`
 }
 
 func testNative(t *testing.T, db *dbal.DB) {
@@ -40,39 +40,39 @@ func testNative(t *testing.T, db *dbal.DB) {
 
 	q := db.Dialect().QuoteIdent
 	em2 := newEM()
-	items, err := smorm.Native[nqItem](ctx, em2, nil,
+	items, err := tenet.Native[nqItem](ctx, em2, nil,
 		"SELECT * FROM "+q("nq_item")+" WHERE "+q("price")+" > ? ORDER BY "+q("name")+" DESC", 1)
 	must(t, err)
 	if len(items) != 2 || items[0].Name != "gamma" || !items[0].Active || items[1].Active || !items[0].Made.Equal(made) || items[0].Meta["i"] != 2.0 || items[0].Ref.IsZero() {
 		t.Fatalf("items = %+v", items)
 	}
-	same, err := smorm.Find[nqItem](ctx, em2, items[0].ID)
+	same, err := tenet.Find[nqItem](ctx, em2, items[0].ID)
 	must(t, err)
 	if same != items[0] {
 		t.Fatal("native results must go through the identity map")
 	}
 	// Renamed columns.
-	renamed, err := smorm.Native[nqItem](ctx, newEM(), &smorm.ResultSetMapping{Rename: map[string]string{"item_name": "name"}},
+	renamed, err := tenet.Native[nqItem](ctx, newEM(), &tenet.ResultSetMapping{Rename: map[string]string{"item_name": "name"}},
 		"SELECT "+q("id")+", "+q("name")+" AS "+q("item_name")+", "+q("active")+", "+q("price")+", "+q("made")+", "+q("ref")+", "+q("meta")+
 			" FROM "+q("nq_item")+" WHERE "+q("name")+" = ?", "alpha")
 	must(t, err)
 	if len(renamed) != 1 || renamed[0].Name != "alpha" {
 		t.Fatalf("renamed = %+v", renamed)
 	}
-	if _, err := smorm.Native[nqItem](ctx, newEM(), nil, "SELECT "+q("id")+" FROM "+q("nq_item")); err == nil || !strings.Contains(err.Error(), "missing columns") {
+	if _, err := tenet.Native[nqItem](ctx, newEM(), nil, "SELECT "+q("id")+" FROM "+q("nq_item")); err == nil || !strings.Contains(err.Error(), "missing columns") {
 		t.Fatalf("missing columns: %v", err)
 	}
 	// Polymorphic native query.
-	vs, err := smorm.Native[inVehicle](ctx, newEM(), nil, "SELECT * FROM "+q("in_vehicle")+" ORDER BY "+q("id"))
+	vs, err := tenet.Native[inVehicle](ctx, newEM(), nil, "SELECT * FROM "+q("in_vehicle")+" ORDER BY "+q("id"))
 	must(t, err)
 	if len(vs) != 2 {
 		t.Fatalf("vehicles = %d", len(vs))
 	}
-	if c, ok := smorm.Concrete(vs[0]).(*inCar); !ok || c.Doors != 5 {
-		t.Fatalf("first vehicle = %T", smorm.Concrete(vs[0]))
+	if c, ok := tenet.Concrete(vs[0]).(*inCar); !ok || c.Doors != 5 {
+		t.Fatalf("first vehicle = %T", tenet.Concrete(vs[0]))
 	}
-	if tr, ok := smorm.Concrete(vs[1]).(*inTruck); !ok || tr.Load != 9 {
-		t.Fatalf("second vehicle = %T", smorm.Concrete(vs[1]))
+	if tr, ok := tenet.Concrete(vs[1]).(*inTruck); !ok || tr.Load != 9 {
+		t.Fatalf("second vehicle = %T", tenet.Concrete(vs[1]))
 	}
 	// Scalars.
 	rows, err := newEM().NativeScalars(ctx, "SELECT COUNT(*) AS n, MAX("+q("name")+") AS "+q("top")+" FROM "+q("nq_item"))

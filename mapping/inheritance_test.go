@@ -5,19 +5,19 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/smatify/smorm/internal/entity"
-	"github.com/smatify/smorm/schema"
+	"github.com/smatify/tenet/internal/entity"
+	"github.com/smatify/tenet/schema"
 )
 
 type vehicle struct {
-	entity.Header `smorm:"table:vehicles,inheritance:single,discriminator:kind"`
+	entity.Header `tenet:"table:vehicles,inheritance:single,discriminator:kind"`
 	ID            int64
 	Wheels        int
-	Owner         *User `smorm:"manyToOne"`
+	Owner         *User `tenet:"manyToOne"`
 }
 
 type car struct {
-	vehicle `smorm:"discriminatorValue:car"`
+	vehicle `tenet:"discriminatorValue:car"`
 	Doors   int
 }
 
@@ -29,18 +29,18 @@ type sportsCar struct {
 type truck struct {
 	vehicle
 	Load  int
-	Fleet *Group `smorm:"manyToOne"`
+	Fleet *Group `tenet:"manyToOne"`
 }
 
 type payment struct {
-	entity.Header `smorm:"inheritance:joined,abstract"`
+	entity.Header `tenet:"inheritance:joined,abstract"`
 	ID            int64
 	Amount        int64
 }
 
 type cardPayment struct {
-	payment `smorm:"table:card_payments"`
-	Last4   string `smorm:"length:4,index"`
+	payment `tenet:"table:card_payments"`
+	Last4   string `tenet:"length:4,index"`
 }
 
 func TestSingleTableMapping(t *testing.T) {
@@ -126,28 +126,28 @@ type badChild struct {
 	noInheritance
 }
 type stiTable struct {
-	vehicle `smorm:"table:x"`
+	vehicle `tenet:"table:x"`
 }
 type dupDiscriminator struct {
-	vehicle `smorm:"discriminatorValue:car"`
+	vehicle `tenet:"discriminatorValue:car"`
 }
 type childID struct {
-	vehicle `smorm:"discriminatorValue:cid"`
-	Other   int64 `smorm:"id"`
+	vehicle `tenet:"discriminatorValue:cid"`
+	Other   int64 `tenet:"id"`
 }
 type badSubOpt struct {
-	vehicle `smorm:"inheritance:joined"`
+	vehicle `tenet:"inheritance:joined"`
 }
 type badInheritance struct {
-	entity.Header `smorm:"inheritance:diamond"`
+	entity.Header `tenet:"inheritance:diamond"`
 	ID            int64
 }
 type discNoInheritance struct {
-	entity.Header `smorm:"discriminator:x"`
+	entity.Header `tenet:"discriminator:x"`
 	ID            int64
 }
 type discCollision struct {
-	entity.Header `smorm:"inheritance:single,discriminator:name"`
+	entity.Header `tenet:"inheritance:single,discriminator:name"`
 	ID            int64
 	Name          string
 }
@@ -175,11 +175,11 @@ func TestInheritanceErrors(t *testing.T) {
 }
 
 type cachedEntity struct {
-	entity.Header `smorm:"cache,cacheTTL:90s"`
+	entity.Header `tenet:"cache,cacheTTL:90s"`
 	ID            int64
 }
 type badTTL struct {
-	entity.Header `smorm:"cacheTTL:soon"`
+	entity.Header `tenet:"cacheTTL:soon"`
 	ID            int64
 }
 

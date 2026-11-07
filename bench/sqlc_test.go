@@ -5,7 +5,7 @@ import (
 	"database/sql"
 	"fmt"
 
-	"github.com/smatify/smorm/bench/sqlcdb"
+	"github.com/smatify/tenet/bench/sqlcdb"
 )
 
 func init() {

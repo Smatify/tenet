@@ -7,8 +7,8 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/smatify/smorm/dbal"
-	"github.com/smatify/smorm/mapping"
+	"github.com/smatify/tenet/dbal"
+	"github.com/smatify/tenet/mapping"
 )
 
 // ResultSetMapping describes how the columns of a native SQL result map to

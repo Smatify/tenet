@@ -6,83 +6,83 @@ import (
 	"testing"
 	"time"
 
-	"github.com/smatify/smorm/dialect"
-	"github.com/smatify/smorm/internal/entity"
-	"github.com/smatify/smorm/internal/testdialect"
-	"github.com/smatify/smorm/mapping"
-	"github.com/smatify/smorm/schema"
-	"github.com/smatify/smorm/uuid"
+	"github.com/smatify/tenet/dialect"
+	"github.com/smatify/tenet/internal/entity"
+	"github.com/smatify/tenet/internal/testdialect"
+	"github.com/smatify/tenet/mapping"
+	"github.com/smatify/tenet/schema"
+	"github.com/smatify/tenet/uuid"
 )
 
 type vAuthor struct {
-	entity.Header `smorm:"table:v_author"`
+	entity.Header `tenet:"table:v_author"`
 	ID            int64
-	Name          string   `smorm:"index:idx_name"`
-	Posts         []*vPost `smorm:"oneToMany,mappedBy:Author,orderBy:Title DESC,orphanRemoval"`
+	Name          string   `tenet:"index:idx_name"`
+	Posts         []*vPost `tenet:"oneToMany,mappedBy:Author,orderBy:Title DESC,orphanRemoval"`
 }
 
 type vPost struct {
-	entity.Header `smorm:"table:v_post"`
+	entity.Header `tenet:"table:v_post"`
 	ID            int64
 	Title         string
-	Author        *vAuthor `smorm:"inversedBy:Posts"`
+	Author        *vAuthor `tenet:"inversedBy:Posts"`
 }
 
 type vDup struct {
-	entity.Header `smorm:"table:v_author"`
+	entity.Header `tenet:"table:v_author"`
 	ID            int64
-	Code          string `smorm:"index:idx_name"`
+	Code          string `tenet:"index:idx_name"`
 }
 
 type vBadVersion struct {
 	entity.Header
 	ID  int64
-	Ver string `smorm:"version"`
+	Ver string `tenet:"version"`
 }
 
 type vStringIdentity struct {
 	entity.Header
-	ID string `smorm:"generated:identity"`
+	ID string `tenet:"generated:identity"`
 }
 
 type vIntUUID struct {
 	entity.Header
-	ID int64 `smorm:"generated:uuid7"`
+	ID int64 `tenet:"generated:uuid7"`
 }
 
 type vSeq struct {
 	entity.Header
-	ID int64 `smorm:"generated:sequence"`
+	ID int64 `tenet:"generated:sequence"`
 }
 
 type vBadOrder struct {
 	entity.Header
 	ID    int64
-	Posts []*vOrderPost `smorm:"oneToMany,mappedBy:Owner,orderBy:nope"`
+	Posts []*vOrderPost `tenet:"oneToMany,mappedBy:Owner,orderBy:nope"`
 }
 
 type vOrderPost struct {
 	entity.Header
 	ID    int64
-	Owner *vBadOrder `smorm:"inversedBy:Posts,cascade:remove"`
+	Owner *vBadOrder `tenet:"inversedBy:Posts,cascade:remove"`
 }
 
 type vOrphanCascade struct {
 	entity.Header
 	ID   int64
-	Kids []*vKid `smorm:"oneToMany,mappedBy:Parent,orphanRemoval"`
+	Kids []*vKid `tenet:"oneToMany,mappedBy:Parent,orphanRemoval"`
 }
 
 type vKid struct {
 	entity.Header
 	ID     int64
-	Parent *vOrphanCascade `smorm:"inversedBy:Kids,cascade:remove"`
+	Parent *vOrphanCascade `tenet:"inversedBy:Kids,cascade:remove"`
 }
 
 type vOK struct {
 	entity.Header
 	ID  uuid.UUID
-	Ver time.Time `smorm:"version"`
+	Ver time.Time `tenet:"version"`
 }
 
 func load(t *testing.T, vs ...any) []*mapping.Entity {

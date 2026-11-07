@@ -3,7 +3,7 @@ package dbtest
 import (
 	"testing"
 
-	"github.com/smatify/smorm/internal/testdialect"
+	"github.com/smatify/tenet/internal/testdialect"
 )
 
 func TestBind(t *testing.T) {

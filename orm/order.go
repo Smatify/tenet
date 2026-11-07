@@ -3,7 +3,7 @@ package orm
 import (
 	"fmt"
 
-	"github.com/smatify/smorm/mapping"
+	"github.com/smatify/tenet/mapping"
 )
 
 // commitOrder sorts entities scheduled for insertion so that every entity is

@@ -1,24 +1,24 @@
 package entity
 
-import "github.com/smatify/smorm"
+import "github.com/smatify/tenet"
 
 // Author is an entity.
 type Author struct {
-	smorm.Entity `smorm:"table:author"`
-	smorm.IntID
-	posts smorm.Collection[Post] `smorm:"oneToMany,mappedBy:author"`
-	name  string                 `smorm:"length:100,unique"`
+	tenet.Entity `tenet:"table:author"`
+	tenet.IntID
+	posts tenet.Collection[Post] `tenet:"oneToMany,mappedBy:author"`
+	name  string                 `tenet:"length:100,unique"`
 }
 
 // Posts returns the posts.
 func (a *Author) Posts() []*Post {
-	smorm.Touch(a)
+	tenet.Touch(a)
 	return a.posts.All()
 }
 
 // AddPost adds item to the posts.
 func (a *Author) AddPost(item *Post) *Author {
-	smorm.Touch(a)
+	tenet.Touch(a)
 	if !a.posts.Contains(item) {
 		a.posts.Add(item)
 		item.SetAuthor(a)
@@ -28,7 +28,7 @@ func (a *Author) AddPost(item *Post) *Author {
 
 // RemovePost removes item from the posts.
 func (a *Author) RemovePost(item *Post) *Author {
-	smorm.Touch(a)
+	tenet.Touch(a)
 	if a.posts.Remove(item) {
 		if item.Author() == a {
 			item.SetAuthor(nil)
@@ -39,13 +39,13 @@ func (a *Author) RemovePost(item *Post) *Author {
 
 // Name returns the name.
 func (a *Author) Name() string {
-	smorm.Touch(a)
+	tenet.Touch(a)
 	return a.name
 }
 
 // SetName sets the name.
 func (a *Author) SetName(v string) *Author {
-	smorm.Touch(a)
+	tenet.Touch(a)
 	a.name = v
 	return a
 }

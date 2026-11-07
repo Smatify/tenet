@@ -5,24 +5,24 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/smatify/smorm"
-	"github.com/smatify/smorm/dbal"
+	"github.com/smatify/tenet"
+	"github.com/smatify/tenet/dbal"
 )
 
 func init() { Register(Case{"ORM/OneToOneInverse", testORMOneToOne}) }
 
 type ooUser struct {
-	smorm.Entity `smorm:"table:oo_user"`
+	tenet.Entity `tenet:"table:oo_user"`
 	ID           int64
-	Name         string     `smorm:"length:50"`
-	Profile      *ooProfile `smorm:"oneToOne,mappedBy:User"`
+	Name         string     `tenet:"length:50"`
+	Profile      *ooProfile `tenet:"oneToOne,mappedBy:User"`
 }
 
 type ooProfile struct {
-	smorm.Entity `smorm:"table:oo_profile"`
+	tenet.Entity `tenet:"table:oo_profile"`
 	ID           int64
-	Bio          string  `smorm:"length:100"`
-	User         *ooUser `smorm:"oneToOne,inversedBy:Profile,notnull,onDelete:cascade"`
+	Bio          string  `tenet:"length:100"`
+	User         *ooUser `tenet:"oneToOne,inversedBy:Profile,notnull,onDelete:cascade"`
 }
 
 func testORMOneToOne(t *testing.T, db *dbal.DB) {
@@ -47,7 +47,7 @@ func testORMOneToOne(t *testing.T, db *dbal.DB) {
 		}
 	}})
 	em2 := newEM()
-	all, err := smorm.NewQuery[ooUser](em2).OrderBy("Name", smorm.Asc).All(ctx)
+	all, err := tenet.NewQuery[ooUser](em2).OrderBy("Name", tenet.Asc).All(ctx)
 	must(t, err)
 	if profileQueries != 1 {
 		t.Fatalf("inverse oneToOne must load in one batched query, got %d", profileQueries)
@@ -55,7 +55,7 @@ func testORMOneToOne(t *testing.T, db *dbal.DB) {
 	if all[0].Profile == nil || all[0].Profile.Bio != "bio a" || all[1].Profile.User != all[1] || all[2].Profile != nil {
 		t.Fatalf("profiles = %+v %+v %+v", all[0].Profile, all[1].Profile, all[2].Profile)
 	}
-	u, err := smorm.Find[ooUser](ctx, newEM(), users[1].ID)
+	u, err := tenet.Find[ooUser](ctx, newEM(), users[1].ID)
 	must(t, err)
 	if u.Profile == nil || u.Profile.Bio != "bio b" {
 		t.Fatal("Find must load the inverse side")

@@ -1,2 +1,2 @@
-// Package mssqldialect provides the mssql dialect for smorm.
+// Package mssqldialect provides the mssql dialect for tenet.
 package mssqldialect

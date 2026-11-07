@@ -9,9 +9,9 @@ import (
 	"text/tabwriter"
 	"time"
 
-	"github.com/smatify/smorm/fixtures"
-	"github.com/smatify/smorm/migrations"
-	"github.com/smatify/smorm/validate"
+	"github.com/smatify/tenet/fixtures"
+	"github.com/smatify/tenet/migrations"
+	"github.com/smatify/tenet/validate"
 )
 
 func builtinCommands() []Command {

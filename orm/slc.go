@@ -9,8 +9,8 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/smatify/smorm/cache"
-	"github.com/smatify/smorm/mapping"
+	"github.com/smatify/tenet/cache"
+	"github.com/smatify/tenet/mapping"
 )
 
 // WithSecondLevelCache shares entity data of cacheable entities (tag option

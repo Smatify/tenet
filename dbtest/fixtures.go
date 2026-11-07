@@ -6,11 +6,11 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/smatify/smorm"
-	"github.com/smatify/smorm/console"
-	"github.com/smatify/smorm/dbal"
-	"github.com/smatify/smorm/fixtures"
-	"github.com/smatify/smorm/mapping"
+	"github.com/smatify/tenet"
+	"github.com/smatify/tenet/console"
+	"github.com/smatify/tenet/dbal"
+	"github.com/smatify/tenet/fixtures"
+	"github.com/smatify/tenet/mapping"
 )
 
 func init() { Register(Case{"Fixtures/LoadPurgeAppend", testFixtures}) }
@@ -77,7 +77,7 @@ func testFixtures(t *testing.T, db *dbal.DB) {
 	if Count(t, db, "col_author") != 4 {
 		t.Fatal("append")
 	}
-	a, err := smorm.RepositoryFor[colAuthor](newEM()).FindOneBy(ctx, smorm.Criteria{"Name": "bob"})
+	a, err := tenet.RepositoryFor[colAuthor](newEM()).FindOneBy(ctx, tenet.Criteria{"Name": "bob"})
 	must(t, err)
 	if a.Tags.Len() != 1 {
 		t.Fatal("m2m from fixtures")

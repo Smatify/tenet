@@ -1,6 +1,6 @@
 package pgdialect
 
-import "github.com/smatify/smorm/dialect"
+import "github.com/smatify/tenet/dialect"
 
 // Dialect is the PostgreSQL dialect.
 type Dialect struct {

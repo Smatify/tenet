@@ -8,18 +8,18 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/smatify/smorm/dialect"
-	"github.com/smatify/smorm/internal/entity"
-	"github.com/smatify/smorm/mapping"
+	"github.com/smatify/tenet/dialect"
+	"github.com/smatify/tenet/internal/entity"
+	"github.com/smatify/tenet/mapping"
 )
 
 type hooked struct {
-	entity.Header `smorm:"table:h"`
+	entity.Header `tenet:"table:h"`
 	ID            int64
 	Name          string
 	Slug          string
-	log           *[]string `smorm:"-"`
-	fail          string    `smorm:"-"`
+	log           *[]string `tenet:"-"`
+	fail          string    `tenet:"-"`
 }
 
 func (h *hooked) rec(s string) error {

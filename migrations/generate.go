@@ -13,9 +13,9 @@ import (
 	"text/template"
 	"time"
 
-	"github.com/smatify/smorm/internal/brand"
-	"github.com/smatify/smorm/mapping"
-	"github.com/smatify/smorm/schema"
+	"github.com/smatify/tenet/internal/brand"
+	"github.com/smatify/tenet/mapping"
+	"github.com/smatify/tenet/schema"
 )
 
 // Format is the file format of generated migrations.
@@ -139,7 +139,7 @@ var goTmpl = template.Must(template.New("migration").Parse(`package {{.Package}}
 import (
 	"context"
 
-	"github.com/smatify/smorm/migrations"
+	"github.com/smatify/tenet/migrations"
 )
 
 func init() {

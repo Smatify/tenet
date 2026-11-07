@@ -3,7 +3,7 @@ package mysqldialect
 import (
 	"testing"
 
-	"github.com/smatify/smorm/dialect"
+	"github.com/smatify/tenet/dialect"
 )
 
 func TestMySQL(t *testing.T) {

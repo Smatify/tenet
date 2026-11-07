@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/smatify/smorm/internal/entity"
+	"github.com/smatify/tenet/internal/entity"
 )
 
 type geo struct {
@@ -13,17 +13,17 @@ type geo struct {
 }
 
 type address struct {
-	Street string `smorm:"length:100,index"`
-	City   string `smorm:"column:town"`
-	Geo    geo    `smorm:"embedded,noprefix"`
+	Street string `tenet:"length:100,index"`
+	City   string `tenet:"column:town"`
+	Geo    geo    `tenet:"embedded,noprefix"`
 }
 
 type customer struct {
 	entity.Header
 	ID       int64
-	Billing  address  `smorm:"embedded"`
-	Shipping address  `smorm:"embedded,prefix:ship_"`
-	Note     *address `smorm:"-"`
+	Billing  address  `tenet:"embedded"`
+	Shipping address  `tenet:"embedded,prefix:ship_"`
+	Note     *address `tenet:"-"`
 }
 
 func TestEmbeddables(t *testing.T) {
@@ -51,31 +51,31 @@ func TestEmbeddables(t *testing.T) {
 type embedPointer struct {
 	entity.Header
 	ID int64
-	A  *address `smorm:"embedded"`
+	A  *address `tenet:"embedded"`
 }
 type embedEntity struct {
 	entity.Header
 	ID int64
-	U  User `smorm:"embedded"`
+	U  User `tenet:"embedded"`
 }
 type prefixWithoutEmbed struct {
 	entity.Header
 	ID int64
-	S  string `smorm:"prefix:x_"`
+	S  string `tenet:"prefix:x_"`
 }
 type assocInEmbed struct {
 	entity.Header
 	ID int64
-	W  withAssoc `smorm:"embedded"`
+	W  withAssoc `tenet:"embedded"`
 }
 type withAssoc struct{ U *User }
 type idInEmbed struct {
 	entity.Header
 	ID int64
-	W  withID `smorm:"embedded"`
+	W  withID `tenet:"embedded"`
 }
 type withID struct {
-	X int64 `smorm:"id"`
+	X int64 `tenet:"id"`
 }
 
 func TestEmbeddableErrors(t *testing.T) {

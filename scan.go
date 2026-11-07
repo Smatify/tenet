@@ -1,4 +1,4 @@
-package smorm
+package tenet
 
 import (
 	"context"
@@ -19,7 +19,7 @@ import (
 //		ID uuid.UUID
 //		N  int
 //	}
-//	counts, err := smorm.Scan[count](ctx, smorm.NewQuery[Comment](em).Columns("{ObjectID} AS id", "count(*) AS n").GroupBy("{ObjectID}"))
+//	counts, err := tenet.Scan[count](ctx, tenet.NewQuery[Comment](em).Columns("{ObjectID} AS id", "count(*) AS n").GroupBy("{ObjectID}"))
 func Scan[R any](ctx context.Context, q Selection) ([]R, error) {
 	rows, err := q.ormQuery().Rows(ctx)
 	if err != nil {

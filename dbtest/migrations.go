@@ -7,12 +7,12 @@ import (
 	"testing"
 	"testing/fstest"
 
-	"github.com/smatify/smorm/dbal"
-	"github.com/smatify/smorm/mapping"
-	"github.com/smatify/smorm/migrations"
-	"github.com/smatify/smorm/schema"
-	"github.com/smatify/smorm/types"
-	"github.com/smatify/smorm/validate"
+	"github.com/smatify/tenet/dbal"
+	"github.com/smatify/tenet/mapping"
+	"github.com/smatify/tenet/migrations"
+	"github.com/smatify/tenet/schema"
+	"github.com/smatify/tenet/types"
+	"github.com/smatify/tenet/validate"
 )
 
 func init() {

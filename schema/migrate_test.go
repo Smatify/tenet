@@ -5,9 +5,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/smatify/smorm/dialect"
-	"github.com/smatify/smorm/internal/testdialect"
-	"github.com/smatify/smorm/types"
+	"github.com/smatify/tenet/dialect"
+	"github.com/smatify/tenet/internal/testdialect"
+	"github.com/smatify/tenet/types"
 )
 
 func migrateFor(t *testing.T, n dialect.Name, from, to *Schema) []string {

@@ -6,8 +6,8 @@ import (
 	"strings"
 	"unicode"
 
-	"github.com/smatify/smorm/dbal"
-	"github.com/smatify/smorm/mapping"
+	"github.com/smatify/tenet/dbal"
+	"github.com/smatify/tenet/mapping"
 )
 
 // DQL is the result of parsing a query in the Doctrine Query Language subset:

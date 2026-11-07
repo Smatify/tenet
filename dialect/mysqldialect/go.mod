@@ -1,10 +1,10 @@
-module github.com/smatify/smorm/dialect/mysqldialect
+module github.com/smatify/tenet/dialect/mysqldialect
 
 go 1.26.0
 
 require (
 	github.com/go-sql-driver/mysql v1.10.1
-	github.com/smatify/smorm v0.0.0
+	github.com/smatify/tenet v0.0.0
 	github.com/testcontainers/testcontainers-go v0.44.0
 	github.com/testcontainers/testcontainers-go/modules/mariadb v0.44.0
 	github.com/testcontainers/testcontainers-go/modules/mysql v0.44.0
@@ -64,4 +64,4 @@ require (
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
 
-replace github.com/smatify/smorm => ../..
+replace github.com/smatify/tenet => ../..

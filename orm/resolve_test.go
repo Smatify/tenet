@@ -7,16 +7,16 @@ import (
 	"testing"
 	"time"
 
-	"github.com/smatify/smorm/dialect"
-	"github.com/smatify/smorm/internal/entity"
+	"github.com/smatify/tenet/dialect"
+	"github.com/smatify/tenet/internal/entity"
 )
 
 // sdSite is soft deletable; sdLog refers to it.
 type sdSite struct {
-	entity.Header `smorm:"table:sd_site"`
+	entity.Header `tenet:"table:sd_site"`
 	ID            int64
 	Title         string
-	DeletedAt     *time.Time `smorm:"column:deleted_at"`
+	DeletedAt     *time.Time `tenet:"column:deleted_at"`
 }
 
 func (s *sdSite) MarkDeleted(now time.Time) { s.DeletedAt = &now }
@@ -24,7 +24,7 @@ func (s *sdSite) IsDeleted() bool           { return s.DeletedAt != nil }
 func (s *sdSite) DeletedColumn() string     { return "deleted_at" }
 
 type sdLog struct {
-	entity.Header `smorm:"table:sd_log"`
+	entity.Header `tenet:"table:sd_log"`
 	ID            int64
 	Site          *sdSite
 }

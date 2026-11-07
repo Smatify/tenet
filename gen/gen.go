@@ -19,11 +19,11 @@ import (
 
 	"golang.org/x/tools/go/packages"
 
-	"github.com/smatify/smorm/internal/brand"
+	"github.com/smatify/tenet/internal/brand"
 )
 
 const (
-	rootPath   = "github.com/smatify/smorm"
+	rootPath   = "github.com/smatify/tenet"
 	headerPkg  = rootPath + "/internal/entity"
 	headerName = "Header"
 )

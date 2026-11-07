@@ -1,4 +1,4 @@
-// Package scaffold creates the project files for a new smorm setup
+// Package scaffold creates the project files for a new tenet setup
 // (cmd/console, the entity package and the migrations package).
 package scaffold
 
@@ -12,7 +12,7 @@ import (
 	"regexp"
 	"text/template"
 
-	"github.com/smatify/smorm/internal/brand"
+	"github.com/smatify/tenet/internal/brand"
 )
 
 // Driver describes how to open a database with a dialect.

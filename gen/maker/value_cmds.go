@@ -7,8 +7,8 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/smatify/smorm/console"
-	"github.com/smatify/smorm/gen/scaffold"
+	"github.com/smatify/tenet/console"
+	"github.com/smatify/tenet/gen/scaffold"
 )
 
 func makeValue(kind ValueKind) console.Command {

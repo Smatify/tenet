@@ -5,7 +5,7 @@ use (
 	.
 	./gen
 	./examples/blog
-	./extra/smormotel
+	./extra/tenetotel
 	./dialect/mssqldialect
 	./dialect/mysqldialect
 	./dialect/pgdialect

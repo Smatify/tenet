@@ -8,8 +8,8 @@ import (
 	"entgo.io/ent/dialect"
 	entsql "entgo.io/ent/dialect/sql"
 
-	"github.com/smatify/smorm/bench/ent"
-	"github.com/smatify/smorm/bench/ent/post"
+	"github.com/smatify/tenet/bench/ent"
+	"github.com/smatify/tenet/bench/ent/post"
 )
 
 func init() {

@@ -1,7 +1,7 @@
-// Package smormotel traces database queries with OpenTelemetry.
+// Package tenetotel traces database queries with OpenTelemetry.
 //
-//	db.AddQueryHook(smormotel.NewQueryHook())
-package smormotel
+//	db.AddQueryHook(tenetotel.NewQueryHook())
+package tenetotel
 
 import (
 	"context"
@@ -11,9 +11,9 @@ import (
 	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/trace"
 
-	"github.com/smatify/smorm/dbal"
-	"github.com/smatify/smorm/dialect"
-	"github.com/smatify/smorm/internal/brand"
+	"github.com/smatify/tenet/dbal"
+	"github.com/smatify/tenet/dialect"
+	"github.com/smatify/tenet/internal/brand"
 )
 
 // QueryHook creates a client span for every statement.

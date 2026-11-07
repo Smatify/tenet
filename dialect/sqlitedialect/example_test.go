@@ -6,29 +6,29 @@ import (
 
 	_ "modernc.org/sqlite"
 
-	"github.com/smatify/smorm"
-	"github.com/smatify/smorm/dbal"
-	"github.com/smatify/smorm/dialect/sqlitedialect"
-	"github.com/smatify/smorm/mapping"
-	"github.com/smatify/smorm/migrations"
-	"github.com/smatify/smorm/schema"
+	"github.com/smatify/tenet"
+	"github.com/smatify/tenet/dbal"
+	"github.com/smatify/tenet/dialect/sqlitedialect"
+	"github.com/smatify/tenet/mapping"
+	"github.com/smatify/tenet/migrations"
+	"github.com/smatify/tenet/schema"
 )
 
 // Author and Post are entities in the Go style: exported fields, a
 // collection on the inverse side, the owning side a pointer.
 type Author struct {
-	smorm.Entity `smorm:"table:author"`
+	tenet.Entity `tenet:"table:author"`
 	ID           int64
-	Name         string                 `smorm:"length:100"`
-	Posts        smorm.Collection[Post] `smorm:"oneToMany,mappedBy:Author,cascade:persist,orderBy:Title"`
+	Name         string                 `tenet:"length:100"`
+	Posts        tenet.Collection[Post] `tenet:"oneToMany,mappedBy:Author,cascade:persist,orderBy:Title"`
 }
 
 type Post struct {
-	smorm.Entity `smorm:"table:post"`
+	tenet.Entity `tenet:"table:post"`
 	ID           int64
-	Title        string  `smorm:"length:200"`
-	Views        int     `smorm:"default:0"`
-	Author       *Author `smorm:"inversedBy:Posts,notnull"`
+	Title        string  `tenet:"length:200"`
+	Views        int     `tenet:"default:0"`
+	Author       *Author `tenet:"inversedBy:Posts,notnull"`
 }
 
 // open is an SQLite database in memory with the tables of Author and Post
@@ -63,7 +63,7 @@ func Example() {
 	defer db.Close()
 
 	// One entity manager per request or job.
-	em := smorm.NewEntityManager(db, smorm.WithContext(ctx), smorm.WithRegistry(reg))
+	em := tenet.NewEntityManager(db, tenet.WithContext(ctx), tenet.WithRegistry(reg))
 	ann := &Author{Name: "Ann"}
 	for _, title := range []string{"Hello", "Again"} {
 		ann.Posts.Add(&Post{Title: title, Author: ann})
@@ -75,17 +75,17 @@ func Example() {
 		panic(err)
 	}
 
-	em = smorm.NewEntityManager(db, smorm.WithContext(ctx), smorm.WithRegistry(reg))
+	em = tenet.NewEntityManager(db, tenet.WithContext(ctx), tenet.WithRegistry(reg))
 	// Fields are named as in Go (Doctrine style entities: their unexported names).
-	posts, err := smorm.NewQuery[Post](em).As("p").Join("p.Author", "a").
-		Where(smorm.Eq("a.Name", "Ann")).OrderBy("p.Title", smorm.Asc).With("Author").All(ctx)
+	posts, err := tenet.NewQuery[Post](em).As("p").Join("p.Author", "a").
+		Where(tenet.Eq("a.Name", "Ann")).OrderBy("p.Title", tenet.Asc).With("Author").All(ctx)
 	if err != nil {
 		panic(err)
 	}
 	for _, p := range posts {
 		fmt.Println(p.Title, "by", p.Author.Name)
 	}
-	author, err := smorm.Find[Author](ctx, em, ann.ID)
+	author, err := tenet.Find[Author](ctx, em, ann.ID)
 	if err != nil {
 		panic(err)
 	}
@@ -103,7 +103,7 @@ func Example_changes() {
 	ctx := context.Background()
 	db, reg := open(ctx)
 	defer db.Close()
-	em := smorm.NewEntityManager(db, smorm.WithContext(ctx), smorm.WithRegistry(reg))
+	em := tenet.NewEntityManager(db, tenet.WithContext(ctx), tenet.WithRegistry(reg))
 	ann := &Author{Name: "Ann"}
 	hello, again := &Post{Title: "Hello", Author: ann}, &Post{Title: "Again", Author: ann}
 	for _, e := range []any{ann, hello, again} {
@@ -122,7 +122,7 @@ func Example_changes() {
 	if err := em.Flush(ctx); err != nil {
 		panic(err)
 	}
-	n, err := smorm.Update[Post](em).Set("Views", smorm.Raw("{Views} + 10")).Where(smorm.Eq("Author", ann.ID)).Exec(ctx)
+	n, err := tenet.Update[Post](em).Set("Views", tenet.Raw("{Views} + 10")).Where(tenet.Eq("Author", ann.ID)).Exec(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -132,7 +132,7 @@ func Example_changes() {
 		Title string
 		Views int
 	}
-	lines, err := smorm.Scan[line](ctx, smorm.NewQuery[Post](em).Columns("{Title} AS title", "{Views} AS views"))
+	lines, err := tenet.Scan[line](ctx, tenet.NewQuery[Post](em).Columns("{Title} AS title", "{Views} AS views"))
 	if err != nil {
 		panic(err)
 	}
@@ -148,15 +148,15 @@ func Example_transactional() {
 	ctx := context.Background()
 	db, reg := open(ctx)
 	defer db.Close()
-	em := smorm.NewEntityManager(db, smorm.WithContext(ctx), smorm.WithRegistry(reg))
-	err := em.Transactional(ctx, func(ctx context.Context, em *smorm.EntityManager) error {
+	em := tenet.NewEntityManager(db, tenet.WithContext(ctx), tenet.WithRegistry(reg))
+	err := em.Transactional(ctx, func(ctx context.Context, em *tenet.EntityManager) error {
 		if err := em.Persist(&Author{Name: "Ann"}); err != nil {
 			return err
 		}
 		return fmt.Errorf("something went wrong")
 	})
 	fmt.Println(err)
-	n, _ := smorm.NewQuery[Author](smorm.NewEntityManager(db, smorm.WithRegistry(reg))).Count(ctx)
+	n, _ := tenet.NewQuery[Author](tenet.NewEntityManager(db, tenet.WithRegistry(reg))).Count(ctx)
 	fmt.Println(n, "authors")
 	// Output:
 	// something went wrong
@@ -210,7 +210,7 @@ func Example_reading() {
 	ctx := context.Background()
 	db, reg := open(ctx)
 	defer db.Close()
-	em := smorm.NewEntityManager(db, smorm.WithContext(ctx), smorm.WithRegistry(reg))
+	em := tenet.NewEntityManager(db, tenet.WithContext(ctx), tenet.WithRegistry(reg))
 	ann, bob := &Author{Name: "Ann"}, &Author{Name: "Bob"}
 	for _, a := range []*Author{ann, bob} {
 		if err := em.Persist(a); err != nil {
@@ -226,8 +226,8 @@ func Example_reading() {
 		panic(err)
 	}
 
-	posts, err := smorm.NewQuery[Post](em).As("p").Join("p.Author", "a").
-		Where(smorm.Like("a.Name", "A%"), smorm.Gt("p.Views", 5)).OrderBy("p.Title", smorm.Asc).All(ctx)
+	posts, err := tenet.NewQuery[Post](em).As("p").Join("p.Author", "a").
+		Where(tenet.Like("a.Name", "A%"), tenet.Gt("p.Views", 5)).OrderBy("p.Title", tenet.Asc).All(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -235,7 +235,7 @@ func Example_reading() {
 		fmt.Println(p.Title, p.Views)
 	}
 
-	page, err := smorm.Paginate(ctx, smorm.NewQuery[Post](em).OrderBy("Title", smorm.Asc), 2, 3)
+	page, err := tenet.Paginate(ctx, tenet.NewQuery[Post](em).OrderBy("Title", tenet.Asc), 2, 3)
 	if err != nil {
 		panic(err)
 	}
@@ -245,8 +245,8 @@ func Example_reading() {
 		Author int64
 		Total  int
 	}
-	rows, err := smorm.Scan[views](ctx, smorm.NewQuery[Post](em).
-		Columns("{Author} AS author", "sum({Views}) AS total").GroupBy("{Author}").OrderBy("Author", smorm.Asc))
+	rows, err := tenet.Scan[views](ctx, tenet.NewQuery[Post](em).
+		Columns("{Author} AS author", "sum({Views}) AS total").GroupBy("{Author}").OrderBy("Author", tenet.Asc))
 	if err != nil {
 		panic(err)
 	}

@@ -1,25 +1,25 @@
-package smorm
+package tenet
 
 import (
 	"time"
 
-	"github.com/smatify/smorm/internal/entity"
-	"github.com/smatify/smorm/uuid"
+	"github.com/smatify/tenet/internal/entity"
+	"github.com/smatify/tenet/uuid"
 )
 
 // Entity marks a struct as an entity. Embed it as the first field and use its
 // tag for entity options:
 //
 //	type User struct {
-//		smorm.Entity `smorm:"table:users"`
-//		smorm.IntID
-//		email string `smorm:"length:180,unique"`
+//		tenet.Entity `tenet:"table:users"`
+//		tenet.IntID
+//		email string `tenet:"length:180,unique"`
 //	}
 type Entity = entity.Header
 
 // IntID is a trait for an auto-incremented BIGINT primary key.
 type IntID struct {
-	id int64 `smorm:"column:id,id"`
+	id int64 `tenet:"column:id,id"`
 }
 
 // ID returns the identifier; it is 0 until the entity has been flushed.
@@ -27,7 +27,7 @@ func (i *IntID) ID() int64 { return i.id }
 
 // UUIDID is a trait for a UUIDv7 primary key generated on persist.
 type UUIDID struct {
-	id uuid.UUID `smorm:"column:id,id"`
+	id uuid.UUID `tenet:"column:id,id"`
 }
 
 // ID returns the identifier; it is the Nil UUID until the entity is persisted.
@@ -36,8 +36,8 @@ func (u *UUIDID) ID() uuid.UUID { return u.id }
 // Timestamps is a trait maintaining created_at and updated_at columns. Both
 // are set when the entity is inserted; updated_at changes on every update.
 type Timestamps struct {
-	createdAt time.Time `smorm:"column:created_at"`
-	updatedAt time.Time `smorm:"column:updated_at"`
+	createdAt time.Time `tenet:"column:created_at"`
+	updatedAt time.Time `tenet:"column:updated_at"`
 }
 
 // CreatedAt returns when the entity was inserted.
@@ -68,9 +68,9 @@ func stored(now time.Time) time.Time { return now.UTC().Truncate(time.Microsecon
 // being removed. EntityManager.Remove sets deleted_at; removing an already
 // soft-deleted entity deletes it for real. The built-in "softdelete" filter
 // hides deleted rows from all queries (disable it with
-// em.Filters().Disable(smorm.SoftDeleteFilterName)).
+// em.Filters().Disable(tenet.SoftDeleteFilterName)).
 type SoftDelete struct {
-	deletedAt *time.Time `smorm:"column:deleted_at"`
+	deletedAt *time.Time `tenet:"column:deleted_at"`
 }
 
 // DeletedAt returns when the entity was soft-deleted (nil if it was not).

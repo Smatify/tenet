@@ -5,8 +5,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/smatify/smorm/internal/entity"
-	"github.com/smatify/smorm/uuid"
+	"github.com/smatify/tenet/internal/entity"
+	"github.com/smatify/tenet/uuid"
 )
 
 func TestReflectAccessorDoctrineStyle(t *testing.T) {

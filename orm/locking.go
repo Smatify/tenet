@@ -7,9 +7,9 @@ import (
 	"reflect"
 	"time"
 
-	"github.com/smatify/smorm/dbal"
-	"github.com/smatify/smorm/internal/brand"
-	"github.com/smatify/smorm/mapping"
+	"github.com/smatify/tenet/dbal"
+	"github.com/smatify/tenet/internal/brand"
+	"github.com/smatify/tenet/mapping"
 )
 
 // ErrOptimisticLock is matched by OptimisticLockError.

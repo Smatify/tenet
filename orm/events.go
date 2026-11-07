@@ -4,7 +4,7 @@ import (
 	"context"
 	"slices"
 
-	"github.com/smatify/smorm/mapping"
+	"github.com/smatify/tenet/mapping"
 )
 
 // Lifecycle hooks are methods on the entity. All of them run during Flush

@@ -5,10 +5,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/smatify/smorm/dbal"
-	"github.com/smatify/smorm/mapping"
-	"github.com/smatify/smorm/schema"
-	"github.com/smatify/smorm/validate"
+	"github.com/smatify/tenet/dbal"
+	"github.com/smatify/tenet/mapping"
+	"github.com/smatify/tenet/schema"
+	"github.com/smatify/tenet/validate"
 )
 
 func init() { Register(Case{"Validate/DatabaseSync", testValidate}) }

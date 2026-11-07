@@ -7,9 +7,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/smatify/smorm/dbal"
-	"github.com/smatify/smorm/types"
-	"github.com/smatify/smorm/uuid"
+	"github.com/smatify/tenet/dbal"
+	"github.com/smatify/tenet/types"
+	"github.com/smatify/tenet/uuid"
 )
 
 func init() { Register(Case{"TypeRoundtrip", testTypeRoundtrip}) }

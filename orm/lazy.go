@@ -8,9 +8,9 @@ import (
 	"runtime"
 	"strings"
 
-	"github.com/smatify/smorm/dbal"
-	"github.com/smatify/smorm/internal/brand"
-	"github.com/smatify/smorm/internal/entity"
+	"github.com/smatify/tenet/dbal"
+	"github.com/smatify/tenet/internal/brand"
+	"github.com/smatify/tenet/internal/entity"
 )
 
 // ErrDetached is wrapped by LazyLoadError when an entity is used after its
@@ -56,7 +56,7 @@ func WithoutLazyLoading() Option { return func(em *EntityManager) { em.noLazy = 
 type LazyLoad struct {
 	Entity string        // "Post", or "Post.tags" for a collection
 	ID     any           // of the entity, or of the collection owner
-	Caller runtime.Frame // first frame outside smorm and the entity's package
+	Caller runtime.Frame // first frame outside tenet and the entity's package
 }
 
 // WithLazyLoadHook calls fn before every lazy load triggered by a getter

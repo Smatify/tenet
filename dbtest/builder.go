@@ -6,8 +6,8 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/smatify/smorm/dbal"
-	"github.com/smatify/smorm/dialect"
+	"github.com/smatify/tenet/dbal"
+	"github.com/smatify/tenet/dialect"
 )
 
 func init() {

@@ -3,7 +3,7 @@ package blog
 import (
 	"testing"
 
-	"github.com/smatify/smorm/mapping"
+	"github.com/smatify/tenet/mapping"
 )
 
 // These tests exercise the committed generated file.

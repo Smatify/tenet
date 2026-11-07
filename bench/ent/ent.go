@@ -12,8 +12,8 @@ import (
 	"entgo.io/ent"
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
-	"github.com/smatify/smorm/bench/ent/author"
-	"github.com/smatify/smorm/bench/ent/post"
+	"github.com/smatify/tenet/bench/ent/author"
+	"github.com/smatify/tenet/bench/ent/post"
 )
 
 // ent aliases to avoid import conflicts in user's code.

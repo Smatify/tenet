@@ -1,6 +1,6 @@
 package mssqldialect
 
-import "github.com/smatify/smorm/dialect"
+import "github.com/smatify/tenet/dialect"
 
 // Dialect is the Microsoft SQL Server (2019+) dialect.
 type Dialect struct {

@@ -3,7 +3,7 @@ package pgdialect
 import (
 	"testing"
 
-	"github.com/smatify/smorm/dialect"
+	"github.com/smatify/tenet/dialect"
 )
 
 func TestDialect(t *testing.T) {

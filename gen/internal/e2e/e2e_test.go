@@ -11,8 +11,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/smatify/smorm/gen/scaffold"
-	"github.com/smatify/smorm/internal/brand"
+	"github.com/smatify/tenet/gen/scaffold"
+	"github.com/smatify/tenet/internal/brand"
 )
 
 func repoRoot() string {

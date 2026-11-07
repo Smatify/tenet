@@ -8,8 +8,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/smatify/smorm/console"
-	"github.com/smatify/smorm/gen"
+	"github.com/smatify/tenet/console"
+	"github.com/smatify/tenet/gen"
 )
 
 // Register adds the maker commands to app.

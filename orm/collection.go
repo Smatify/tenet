@@ -6,8 +6,8 @@ import (
 	"reflect"
 	"slices"
 
-	"github.com/smatify/smorm/internal/entity"
-	"github.com/smatify/smorm/mapping"
+	"github.com/smatify/tenet/internal/entity"
+	"github.com/smatify/tenet/mapping"
 )
 
 // Collection holds the entities of a to-many association. A collection of a

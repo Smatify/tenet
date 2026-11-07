@@ -5,27 +5,27 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/smatify/smorm"
-	"github.com/smatify/smorm/dbal"
+	"github.com/smatify/tenet"
+	"github.com/smatify/tenet/dbal"
 )
 
 func init() { Register(Case{"ORM/FiltersAndSoftDelete", testORMFilters}) }
 
 type sdPost struct {
-	smorm.Entity `smorm:"table:sd_post"`
-	smorm.IntID
-	smorm.SoftDelete
-	Title    string                      `smorm:"length:50"`
-	TenantID int64                       `smorm:"column:tenant_id"`
-	Comments smorm.Collection[sdComment] `smorm:"oneToMany,mappedBy:Post,fetch:extraLazy"`
+	tenet.Entity `tenet:"table:sd_post"`
+	tenet.IntID
+	tenet.SoftDelete
+	Title    string                      `tenet:"length:50"`
+	TenantID int64                       `tenet:"column:tenant_id"`
+	Comments tenet.Collection[sdComment] `tenet:"oneToMany,mappedBy:Post,fetch:extraLazy"`
 }
 
 type sdComment struct {
-	smorm.Entity `smorm:"table:sd_comment"`
-	smorm.IntID
-	smorm.SoftDelete
-	Body string  `smorm:"length:50"`
-	Post *sdPost `smorm:"inversedBy:Comments,notnull"`
+	tenet.Entity `tenet:"table:sd_comment"`
+	tenet.IntID
+	tenet.SoftDelete
+	Body string  `tenet:"length:50"`
+	Post *sdPost `tenet:"inversedBy:Comments,notnull"`
 }
 
 func testORMFilters(t *testing.T, db *dbal.DB) {
@@ -48,10 +48,10 @@ func testORMFilters(t *testing.T, db *dbal.DB) {
 		t.Fatal("soft delete must keep the row and detach the entity")
 	}
 	em2 := newEM()
-	if _, err := smorm.Find[sdPost](ctx, em2, p2.ID()); !errors.Is(err, smorm.ErrNotFound) {
+	if _, err := tenet.Find[sdPost](ctx, em2, p2.ID()); !errors.Is(err, tenet.ErrNotFound) {
 		t.Fatalf("Find deleted = %v", err)
 	}
-	repo := smorm.RepositoryFor[sdPost](em2)
+	repo := tenet.RepositoryFor[sdPost](em2)
 	if all, _ := repo.FindAll(ctx); len(all) != 2 {
 		t.Fatalf("FindAll = %d", len(all))
 	}
@@ -67,15 +67,15 @@ func testORMFilters(t *testing.T, db *dbal.DB) {
 		t.Fatalf("collection = %v", all)
 	}
 	// Joins honour filters of the joined entity.
-	comments, err := smorm.NewQuery[sdComment](em2).Join("Post", "p").All(ctx)
+	comments, err := tenet.NewQuery[sdComment](em2).Join("Post", "p").All(ctx)
 	must(t, err)
 	if len(comments) != 1 {
 		t.Fatalf("join filter: %d comments", len(comments))
 	}
 	// Tenant filter.
 	em3 := newEM()
-	em3.Filters().Enable("tenant", smorm.ColumnFilter("tenant_id", 1))
-	tenant, err := smorm.RepositoryFor[sdPost](em3).FindAll(ctx)
+	em3.Filters().Enable("tenant", tenet.ColumnFilter("tenant_id", 1))
+	tenant, err := tenet.RepositoryFor[sdPost](em3).FindAll(ctx)
 	must(t, err)
 	if len(tenant) != 1 || tenant[0].Title != "a" {
 		t.Fatalf("tenant filter = %v", tenant)
@@ -85,33 +85,33 @@ func testORMFilters(t *testing.T, db *dbal.DB) {
 	}
 	// A reference to a soft-deleted entity still resolves (the row exists):
 	// lazily and preloaded.
-	lazy, err := smorm.Find[sdComment](ctx, newEM(), c2.ID())
+	lazy, err := tenet.Find[sdComment](ctx, newEM(), c2.ID())
 	must(t, err)
-	smorm.Touch(lazy.Post)
+	tenet.Touch(lazy.Post)
 	if lazy.Post.Title != "b" {
 		t.Fatalf("lazy reference to a deleted post = %q", lazy.Post.Title)
 	}
-	preloaded, err := smorm.NewQuery[sdComment](newEM()).Where(smorm.Eq("ID", c2.ID())).With("Post").All(ctx)
+	preloaded, err := tenet.NewQuery[sdComment](newEM()).Where(tenet.Eq("ID", c2.ID())).With("Post").All(ctx)
 	must(t, err)
 	if len(preloaded) != 1 || preloaded[0].Post.Title != "b" {
 		t.Fatalf("preloaded reference to a deleted post = %v", preloaded)
 	}
 	// Restore and hard delete with the soft delete filter disabled.
 	em4 := newEM()
-	em4.Filters().Disable(smorm.SoftDeleteFilterName)
-	deleted, err := smorm.Find[sdPost](ctx, em4, p2.ID())
+	em4.Filters().Disable(tenet.SoftDeleteFilterName)
+	deleted, err := tenet.Find[sdPost](ctx, em4, p2.ID())
 	must(t, err)
 	if !deleted.IsDeleted() || deleted.DeletedAt() == nil {
 		t.Fatal("deleted_at must be loaded")
 	}
 	deleted.Restore()
 	must(t, em4.Flush(ctx))
-	if _, err := smorm.Find[sdPost](ctx, newEM(), p2.ID()); err != nil {
+	if _, err := tenet.Find[sdPost](ctx, newEM(), p2.ID()); err != nil {
 		t.Fatalf("restored post: %v", err)
 	}
 	em5 := newEM()
-	em5.Filters().Disable(smorm.SoftDeleteFilterName)
-	gone, err := smorm.Find[sdComment](ctx, em5, c3.ID())
+	em5.Filters().Disable(tenet.SoftDeleteFilterName)
+	gone, err := tenet.Find[sdComment](ctx, em5, c3.ID())
 	must(t, err)
 	must(t, em5.Remove(gone)) // already soft-deleted: hard delete
 	must(t, em5.Flush(ctx))

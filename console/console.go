@@ -17,12 +17,12 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/smatify/smorm/dbal"
-	"github.com/smatify/smorm/dialect"
-	"github.com/smatify/smorm/fixtures"
-	"github.com/smatify/smorm/internal/brand"
-	"github.com/smatify/smorm/mapping"
-	"github.com/smatify/smorm/migrations"
+	"github.com/smatify/tenet/dbal"
+	"github.com/smatify/tenet/dialect"
+	"github.com/smatify/tenet/fixtures"
+	"github.com/smatify/tenet/internal/brand"
+	"github.com/smatify/tenet/mapping"
+	"github.com/smatify/tenet/migrations"
 )
 
 // Command is a console command.

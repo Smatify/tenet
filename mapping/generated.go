@@ -5,7 +5,7 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/smatify/smorm/internal/entity"
+	"github.com/smatify/tenet/internal/entity"
 )
 
 // GeneratedType is registered by generated code for one entity type. Fields

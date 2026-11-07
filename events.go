@@ -1,6 +1,6 @@
-package smorm
+package tenet
 
-import "github.com/smatify/smorm/orm"
+import "github.com/smatify/tenet/orm"
 
 // Lifecycle hook interfaces implemented by entities.
 type (

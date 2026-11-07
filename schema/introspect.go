@@ -9,8 +9,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/smatify/smorm/dialect"
-	"github.com/smatify/smorm/types"
+	"github.com/smatify/tenet/dialect"
+	"github.com/smatify/tenet/types"
 )
 
 // Queryer is the subset of dbal.IDB needed for introspection.

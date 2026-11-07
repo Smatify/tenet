@@ -5,19 +5,19 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/smatify/smorm/dialect"
-	"github.com/smatify/smorm/internal/entity"
+	"github.com/smatify/tenet/dialect"
+	"github.com/smatify/tenet/internal/entity"
 )
 
 type uShelf struct {
-	entity.Header `smorm:"table:shelf"`
-	ID            string `smorm:"generated:none"`
+	entity.Header `tenet:"table:shelf"`
+	ID            string `tenet:"generated:none"`
 }
 
 type uItem struct {
-	entity.Header `smorm:"table:item"`
-	ID            string  `smorm:"generated:none"`
-	Shelf         *uShelf `smorm:"notnull"`
+	entity.Header `tenet:"table:item"`
+	ID            string  `tenet:"generated:none"`
+	Shelf         *uShelf `tenet:"notnull"`
 }
 
 // TestInsertsGroupedByType: parents and children persisted in turns are

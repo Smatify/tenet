@@ -14,9 +14,9 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/smatify/smorm/dbal"
-	"github.com/smatify/smorm/dialect"
-	"github.com/smatify/smorm/internal/brand"
+	"github.com/smatify/tenet/dbal"
+	"github.com/smatify/tenet/dialect"
+	"github.com/smatify/tenet/internal/brand"
 )
 
 // Migration is one versioned change.

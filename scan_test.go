@@ -1,4 +1,4 @@
-package smorm
+package tenet
 
 import "testing"
 

@@ -5,21 +5,21 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/smatify/smorm"
-	"github.com/smatify/smorm/dbal"
-	"github.com/smatify/smorm/dialect"
-	"github.com/smatify/smorm/mapping"
-	"github.com/smatify/smorm/schema"
-	"github.com/smatify/smorm/uuid"
+	"github.com/smatify/tenet"
+	"github.com/smatify/tenet/dbal"
+	"github.com/smatify/tenet/dialect"
+	"github.com/smatify/tenet/mapping"
+	"github.com/smatify/tenet/schema"
+	"github.com/smatify/tenet/uuid"
 )
 
 func init() { Register(Case{"ORM/GeneratedColumn", testORMGenerated}) }
 
 type ormNumbered struct {
-	smorm.Entity `smorm:"table:orm_numbered"`
-	smorm.UUIDID
-	number int64  `smorm:"generated:identity"`
-	title  string `smorm:"length:50"`
+	tenet.Entity `tenet:"table:orm_numbered"`
+	tenet.UUIDID
+	number int64  `tenet:"generated:identity"`
+	title  string `tenet:"length:50"`
 }
 
 // testORMGenerated adds a generated:identity column to a table with rows,
@@ -59,7 +59,7 @@ func testORMGenerated(t *testing.T, db *dbal.DB) {
 		t.Fatalf("existing row number = %d", n)
 	}
 
-	em := smorm.NewEntityManager(db, smorm.WithRegistry(reg))
+	em := tenet.NewEntityManager(db, tenet.WithRegistry(reg))
 	a, b := &ormNumbered{title: "a"}, &ormNumbered{title: "b"}
 	must(t, em.Persist(a))
 	must(t, em.Persist(b))
@@ -69,7 +69,7 @@ func testORMGenerated(t *testing.T, db *dbal.DB) {
 	}
 	a.title = "a2" // change tracking knows the generated value
 	must(t, em.Flush(ctx))
-	got, err := smorm.Find[ormNumbered](ctx, smorm.NewEntityManager(db, smorm.WithRegistry(reg)), a.ID())
+	got, err := tenet.Find[ormNumbered](ctx, tenet.NewEntityManager(db, tenet.WithRegistry(reg)), a.ID())
 	must(t, err)
 	if got.number != 2 || got.title != "a2" {
 		t.Fatalf("reloaded = %d %q", got.number, got.title)

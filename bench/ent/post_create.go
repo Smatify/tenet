@@ -9,8 +9,8 @@ import (
 
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
-	"github.com/smatify/smorm/bench/ent/author"
-	"github.com/smatify/smorm/bench/ent/post"
+	"github.com/smatify/tenet/bench/ent/author"
+	"github.com/smatify/tenet/bench/ent/post"
 )
 
 // PostCreate is the builder for creating a Post entity.

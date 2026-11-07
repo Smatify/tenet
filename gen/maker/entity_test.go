@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/smatify/smorm/console"
+	"github.com/smatify/tenet/console"
 )
 
 func runMaker(t *testing.T, entDir, input string, args ...string) (string, int) {
@@ -58,7 +58,7 @@ func TestMakeEntityWizard(t *testing.T) {
 	if !strings.Contains(string(author), "oneToMany,mappedBy:author,cascade:persist|remove,orphanRemoval") {
 		t.Errorf("author.go:\n%s", author)
 	}
-	if _, err := os.Stat(filepath.Join(entDir, "entities_smorm.go")); err != nil {
+	if _, err := os.Stat(filepath.Join(entDir, "entities_tenet.go")); err != nil {
 		t.Fatal("generated code missing")
 	}
 	// Running again on an existing entity adds fields.

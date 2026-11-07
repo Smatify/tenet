@@ -1,9 +1,9 @@
-module github.com/smatify/smorm/extra/smormotel
+module github.com/smatify/tenet/extra/tenetotel
 
 go 1.26.0
 
 require (
-	github.com/smatify/smorm v0.0.0
+	github.com/smatify/tenet v0.0.0
 	go.opentelemetry.io/otel v1.47.0
 	go.opentelemetry.io/otel/sdk v1.47.0
 	go.opentelemetry.io/otel/trace v1.47.0
@@ -20,4 +20,4 @@ require (
 	golang.org/x/sys v0.48.0 // indirect
 )
 
-replace github.com/smatify/smorm => ../..
+replace github.com/smatify/tenet => ../..

@@ -5,8 +5,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/smatify/smorm"
-	"github.com/smatify/smorm/dbal"
+	"github.com/smatify/tenet"
+	"github.com/smatify/tenet/dbal"
 )
 
 func init() { Register(Case{"ORM/Embeddables", testORMEmbedded}) }
@@ -14,17 +14,17 @@ func init() { Register(Case{"ORM/Embeddables", testORMEmbedded}) }
 type emGeo struct{ Lat, Lng float64 }
 
 type emAddress struct {
-	Street string `smorm:"length:100"`
-	City   string `smorm:"length:50"`
-	Geo    emGeo  `smorm:"embedded,noprefix"`
+	Street string `tenet:"length:100"`
+	City   string `tenet:"length:50"`
+	Geo    emGeo  `tenet:"embedded,noprefix"`
 }
 
 type emCustomer struct {
-	smorm.Entity `smorm:"table:em_customer"`
+	tenet.Entity `tenet:"table:em_customer"`
 	ID           int64
-	Name         string    `smorm:"length:50"`
-	Billing      emAddress `smorm:"embedded"`
-	Shipping     emAddress `smorm:"embedded,prefix:ship_"`
+	Name         string    `tenet:"length:50"`
+	Billing      emAddress `tenet:"embedded"`
+	Shipping     emAddress `tenet:"embedded,prefix:ship_"`
 }
 
 func testORMEmbedded(t *testing.T, db *dbal.DB) {
@@ -37,7 +37,7 @@ func testORMEmbedded(t *testing.T, db *dbal.DB) {
 	must(t, em.Flush(ctx))
 
 	em2 := newEM()
-	l, err := smorm.Find[emCustomer](ctx, em2, c.ID)
+	l, err := tenet.Find[emCustomer](ctx, em2, c.ID)
 	must(t, err)
 	if l.Billing != c.Billing || l.Shipping.City != "Hamburg" {
 		t.Fatalf("loaded = %+v", l)
@@ -53,12 +53,12 @@ func testORMEmbedded(t *testing.T, db *dbal.DB) {
 	if len(updates) != 1 || !strings.Contains(updates[0], "ship_lng") || strings.Contains(updates[0], "billing") {
 		t.Fatalf("updates = %v", updates)
 	}
-	found, err := smorm.NewQuery[emCustomer](newEM()).Where(smorm.Eq("Billing.City", "Berlin"), smorm.Gt("Shipping.Geo.Lng", 1)).All(ctx)
+	found, err := tenet.NewQuery[emCustomer](newEM()).Where(tenet.Eq("Billing.City", "Berlin"), tenet.Gt("Shipping.Geo.Lng", 1)).All(ctx)
 	must(t, err)
 	if len(found) != 1 || found[0].Name != "c" {
 		t.Fatalf("query by embedded field = %v", found)
 	}
-	byCriteria, err := smorm.RepositoryFor[emCustomer](newEM()).FindBy(ctx, smorm.Criteria{"Billing.City": "Munich"})
+	byCriteria, err := tenet.RepositoryFor[emCustomer](newEM()).FindBy(ctx, tenet.Criteria{"Billing.City": "Munich"})
 	must(t, err)
 	if len(byCriteria) != 1 || byCriteria[0].Name != "d" {
 		t.Fatal("criteria by embedded field")

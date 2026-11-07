@@ -1,5 +1,5 @@
-// Package smormdebug provides a query hook that logs statements for debugging.
-package smormdebug
+// Package tenetdebug provides a query hook that logs statements for debugging.
+package tenetdebug
 
 import (
 	"context"
@@ -9,8 +9,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/smatify/smorm/dbal"
-	"github.com/smatify/smorm/internal/brand"
+	"github.com/smatify/tenet/dbal"
+	"github.com/smatify/tenet/internal/brand"
 )
 
 // QueryHook logs queries to a writer.

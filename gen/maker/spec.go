@@ -9,9 +9,9 @@ import (
 	"strings"
 	"unicode"
 
-	"github.com/smatify/smorm/gen/astedit"
-	"github.com/smatify/smorm/internal/brand"
-	"github.com/smatify/smorm/mapping"
+	"github.com/smatify/tenet/gen/astedit"
+	"github.com/smatify/tenet/internal/brand"
+	"github.com/smatify/tenet/mapping"
 )
 
 // Style selects how generated entities expose their data.

@@ -1,14 +1,14 @@
 // Command generate writes reflection-free entity accessors for the packages
 // in the given directories (default "."). Use it from go generate:
 //
-//	//go:generate go run github.com/smatify/smorm/gen/cmd/generate
+//	//go:generate go run github.com/smatify/tenet/gen/cmd/generate
 package main
 
 import (
 	"fmt"
 	"os"
 
-	"github.com/smatify/smorm/gen"
+	"github.com/smatify/tenet/gen"
 )
 
 func main() {

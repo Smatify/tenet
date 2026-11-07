@@ -6,24 +6,24 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/smatify/smorm"
-	"github.com/smatify/smorm/dbal"
+	"github.com/smatify/tenet"
+	"github.com/smatify/tenet/dbal"
 )
 
 func init() { Register(Case{"ORM/PreloadAndEager", testORMPreload}) }
 
 type eOwner struct {
-	smorm.Entity `smorm:"table:e_owner"`
+	tenet.Entity `tenet:"table:e_owner"`
 	ID           int64
-	Name         string  `smorm:"length:50"`
-	Pets         []*ePet `smorm:"oneToMany,mappedBy:Owner,orderBy:Name"`
+	Name         string  `tenet:"length:50"`
+	Pets         []*ePet `tenet:"oneToMany,mappedBy:Owner,orderBy:Name"`
 }
 
 type ePet struct {
-	smorm.Entity `smorm:"table:e_pet"`
+	tenet.Entity `tenet:"table:e_pet"`
 	ID           int64
-	Name         string  `smorm:"length:50"`
-	Owner        *eOwner `smorm:"inversedBy:Pets,fetch:eager"`
+	Name         string  `tenet:"length:50"`
+	Owner        *eOwner `tenet:"inversedBy:Pets,fetch:eager"`
 }
 
 func testORMPreload(t *testing.T, db *dbal.DB) {
@@ -57,7 +57,7 @@ func testORMPreload(t *testing.T, db *dbal.DB) {
 	rows, err := db.NewSelect().Column("id").Table("col_author").OrderBy("id", dbal.Asc).ScanMaps(ctx)
 	must(t, err)
 	for _, r := range rows {
-		a, err := smorm.Find[colAuthor](ctx, em2, r["id"])
+		a, err := tenet.Find[colAuthor](ctx, em2, r["id"])
 		must(t, err)
 		roots = append(roots, a)
 	}
@@ -85,7 +85,7 @@ func testORMPreload(t *testing.T, db *dbal.DB) {
 	}
 	// Slices are loaded eagerly; fetch:eager to-one associations too.
 	em3 := newEM()
-	lo, err := smorm.Find[eOwner](ctx, em3, o.ID)
+	lo, err := tenet.Find[eOwner](ctx, em3, o.ID)
 	must(t, err)
 	var names []string
 	for _, p := range lo.Pets {
@@ -95,7 +95,7 @@ func testORMPreload(t *testing.T, db *dbal.DB) {
 		t.Fatalf("pets = %v", names)
 	}
 	em4 := newEM()
-	pet, err := smorm.Find[ePet](ctx, em4, lo.Pets[0].ID)
+	pet, err := tenet.Find[ePet](ctx, em4, lo.Pets[0].ID)
 	must(t, err)
 	if !em4.IsInitialized(pet.Owner) || pet.Owner.Name != "olga" || len(pet.Owner.Pets) != 2 {
 		t.Fatal("eager manyToOne must load the owner (and its eager pets)")

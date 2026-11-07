@@ -10,7 +10,7 @@ import (
 
 	"golang.org/x/tools/go/analysis"
 
-	"github.com/smatify/smorm/internal/brand"
+	"github.com/smatify/tenet/internal/brand"
 )
 
 // condFuncs take a field name as their first argument.
@@ -19,9 +19,9 @@ var condFuncs = map[string]bool{"Eq": true, "Neq": true, "Gt": true, "Gte": true
 
 var placeholder = regexp.MustCompile(`\{([A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)?)\}`)
 
-// smormObj returns the name of the function or variable called, when it is
+// tenetObj returns the name of the function or variable called, when it is
 // declared in the root package or in orm.
-func smormObj(pass *analysis.Pass, call *ast.CallExpr) string {
+func tenetObj(pass *analysis.Pass, call *ast.CallExpr) string {
 	obj := typeutilCallee(pass, call)
 	if obj == nil || obj.Pkg() == nil {
 		return ""
@@ -111,7 +111,7 @@ func (c fieldChecker) cond(e ast.Expr) {
 	if !ok {
 		return
 	}
-	switch name := smormObj(c.pass, call); {
+	switch name := tenetObj(c.pass, call); {
 	case condFuncs[name] && len(call.Args) > 0:
 		c.fieldArg(call.Args[0])
 	case name == "Raw" && len(call.Args) > 0:
@@ -129,7 +129,7 @@ func (c fieldChecker) fieldArg(e ast.Expr) {
 		c.check(e, s)
 		return
 	}
-	if call, ok := ast.Unparen(e).(*ast.CallExpr); ok && smormObj(c.pass, call) == "Raw" && len(call.Args) > 0 {
+	if call, ok := ast.Unparen(e).(*ast.CallExpr); ok && tenetObj(c.pass, call) == "Raw" && len(call.Args) > 0 {
 		c.raw(call.Args[0])
 	}
 }
@@ -157,7 +157,7 @@ func (c fieldChecker) option(e ast.Expr) {
 	if !ok {
 		return
 	}
-	switch smormObj(c.pass, call) {
+	switch tenetObj(c.pass, call) {
 	case "OrderBy":
 		if len(call.Args) > 0 {
 			c.fieldArg(call.Args[0])

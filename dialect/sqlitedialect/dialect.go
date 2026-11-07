@@ -1,6 +1,6 @@
 package sqlitedialect
 
-import "github.com/smatify/smorm/dialect"
+import "github.com/smatify/tenet/dialect"
 
 // Dialect is the SQLite (3.35+) dialect.
 type Dialect struct {

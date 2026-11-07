@@ -8,12 +8,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/smatify/smorm"
-	"github.com/smatify/smorm/dbal"
-	"github.com/smatify/smorm/dialect"
-	"github.com/smatify/smorm/mapping"
-	"github.com/smatify/smorm/schema"
-	"github.com/smatify/smorm/uuid"
+	"github.com/smatify/tenet"
+	"github.com/smatify/tenet/dbal"
+	"github.com/smatify/tenet/dialect"
+	"github.com/smatify/tenet/mapping"
+	"github.com/smatify/tenet/schema"
+	"github.com/smatify/tenet/uuid"
 )
 
 func init() {
@@ -28,52 +28,52 @@ func init() {
 }
 
 type ormAuthor struct {
-	smorm.Entity `smorm:"table:orm_author"`
-	smorm.IntID
-	smorm.Timestamps
-	name  string         `smorm:"length:100,unique"`
-	email *string        `smorm:"length:180"`
-	score int            `smorm:"nullzero"`
-	prefs map[string]any `smorm:"nullable"`
+	tenet.Entity `tenet:"table:orm_author"`
+	tenet.IntID
+	tenet.Timestamps
+	name  string         `tenet:"length:100,unique"`
+	email *string        `tenet:"length:180"`
+	score int            `tenet:"nullzero"`
+	prefs map[string]any `tenet:"nullable"`
 }
 
 type ormBook struct {
-	smorm.Entity `smorm:"table:orm_book"`
-	smorm.UUIDID
-	title  string     `smorm:"length:200"`
-	author *ormAuthor `smorm:"manyToOne,notnull,onDelete:cascade"`
-	editor *ormAuthor `smorm:"manyToOne,cascade:persist"`
+	tenet.Entity `tenet:"table:orm_book"`
+	tenet.UUIDID
+	title  string     `tenet:"length:200"`
+	author *ormAuthor `tenet:"manyToOne,notnull,onDelete:cascade"`
+	editor *ormAuthor `tenet:"manyToOne,cascade:persist"`
 }
 
 type ormCategory struct {
-	smorm.Entity `smorm:"table:orm_category"`
+	tenet.Entity `tenet:"table:orm_category"`
 	ID           int64
-	Name         string       `smorm:"length:50"`
-	Parent       *ormCategory `smorm:"manyToOne"`
+	Name         string       `tenet:"length:50"`
+	Parent       *ormCategory `tenet:"manyToOne"`
 }
 
 type ormPerson struct {
-	smorm.Entity `smorm:"table:orm_person"`
+	tenet.Entity `tenet:"table:orm_person"`
 	ID           int64
-	Name         string     `smorm:"length:50"`
-	Friend       *ormPerson `smorm:"manyToOne"`
+	Name         string     `tenet:"length:50"`
+	Friend       *ormPerson `tenet:"manyToOne"`
 }
 
 type ormTicket struct {
-	smorm.Entity `smorm:"table:orm_ticket"`
-	ID           int64  `smorm:"generated:sequence"`
-	Subject      string `smorm:"length:50"`
+	tenet.Entity `tenet:"table:orm_ticket"`
+	ID           int64  `tenet:"generated:sequence"`
+	Subject      string `tenet:"length:50"`
 }
 
 type ormLine struct {
-	smorm.Entity `smorm:"table:orm_line"`
-	OrderNo      int64 `smorm:"id"`
-	LineNo       int32 `smorm:"id"`
+	tenet.Entity `tenet:"table:orm_line"`
+	OrderNo      int64 `tenet:"id"`
+	LineNo       int32 `tenet:"id"`
 	Qty          int32
 }
 
 type ormCounter struct {
-	smorm.Entity `smorm:"table:orm_counter"`
+	tenet.Entity `tenet:"table:orm_counter"`
 	ID           int64
 }
 
@@ -83,7 +83,7 @@ var ormRegistry = sync.OnceValues(func() (*mapping.Registry, error) {
 })
 
 // setupORM creates the ORM test tables and returns a fresh entity manager factory.
-func setupORM(t *testing.T, db *dbal.DB, extra ...any) func() *smorm.EntityManager {
+func setupORM(t *testing.T, db *dbal.DB, extra ...any) func() *tenet.EntityManager {
 	t.Helper()
 	base, err := ormRegistry()
 	if err != nil {
@@ -104,7 +104,7 @@ func setupORM(t *testing.T, db *dbal.DB, extra ...any) func() *smorm.EntityManag
 		t.Fatal(err)
 	}
 	ApplySchema(t, db, stmts)
-	return func() *smorm.EntityManager { return smorm.NewEntityManager(db, smorm.WithRegistry(reg)) }
+	return func() *tenet.EntityManager { return tenet.NewEntityManager(db, tenet.WithRegistry(reg)) }
 }
 
 func must(t *testing.T, err error) {
@@ -135,14 +135,14 @@ func testORMCrud(t *testing.T, db *dbal.DB) {
 		t.Fatal("ann must be managed")
 	}
 	// Identity map: same pointer without a query.
-	same, err := smorm.Find[ormAuthor](ctx, em, ann.ID())
+	same, err := tenet.Find[ormAuthor](ctx, em, ann.ID())
 	must(t, err)
 	if same != ann {
 		t.Fatal("identity map must return the same instance")
 	}
 	// A second entity manager loads from the database.
 	em2 := newEM()
-	loaded, err := smorm.Find[ormAuthor](ctx, em2, ann.ID())
+	loaded, err := tenet.Find[ormAuthor](ctx, em2, ann.ID())
 	must(t, err)
 	if loaded == ann || loaded.name != "ann" || *loaded.email != email || loaded.prefs["lang"] != "de" || loaded.score != 0 {
 		t.Fatalf("loaded = %+v", loaded)
@@ -150,7 +150,7 @@ func testORMCrud(t *testing.T, db *dbal.DB) {
 	if !loaded.CreatedAt().Equal(ann.CreatedAt().Truncate(time.Microsecond)) && loaded.CreatedAt().Sub(ann.CreatedAt()).Abs() > time.Second {
 		t.Fatalf("created_at %v vs %v", loaded.CreatedAt(), ann.CreatedAt())
 	}
-	lb, err := smorm.Find[ormBook](ctx, em2, book.ID())
+	lb, err := tenet.Find[ormBook](ctx, em2, book.ID())
 	must(t, err)
 	if lb.author != loaded || lb.editor != nil {
 		t.Fatal("manyToOne must resolve through the identity map")
@@ -195,7 +195,7 @@ func testORMCrud(t *testing.T, db *dbal.DB) {
 		t.Fatalf("JSON change not detected: %v", updates)
 	}
 	em3 := newEM()
-	again, err := smorm.Find[ormAuthor](ctx, em3, ann.ID())
+	again, err := tenet.Find[ormAuthor](ctx, em3, ann.ID())
 	must(t, err)
 	if again.name != "annie" || again.score != 7 || again.prefs["lang"] != "en" {
 		t.Fatalf("again = %+v", again)
@@ -211,10 +211,10 @@ func testORMCrud(t *testing.T, db *dbal.DB) {
 	// Remove cascades in the database (ON DELETE CASCADE) and in the ORM.
 	must(t, em3.Remove(again))
 	must(t, em3.Flush(ctx))
-	if _, err := smorm.Find[ormAuthor](ctx, em3, ann.ID()); !errors.Is(err, smorm.ErrNotFound) {
+	if _, err := tenet.Find[ormAuthor](ctx, em3, ann.ID()); !errors.Is(err, tenet.ErrNotFound) {
 		t.Fatalf("err = %v", err)
 	}
-	if _, err := smorm.Find[ormBook](ctx, newEM(), book.ID()); !errors.Is(err, smorm.ErrNotFound) {
+	if _, err := tenet.Find[ormBook](ctx, newEM(), book.ID()); !errors.Is(err, tenet.ErrNotFound) {
 		t.Fatalf("book err = %v", err)
 	}
 }
@@ -244,12 +244,12 @@ func testORMReferences(t *testing.T, db *dbal.DB) {
 	_ = nf
 
 	em2 := newEM()
-	ref, err := smorm.Reference[ormAuthor](em2, ann.ID())
+	ref, err := tenet.Reference[ormAuthor](em2, ann.ID())
 	must(t, err)
 	if em2.IsInitialized(ref) || ref.ID() != ann.ID() || ref.name != "" {
 		t.Fatal("reference must be an uninitialized stub")
 	}
-	lb, err := smorm.Find[ormBook](ctx, em2, b.ID())
+	lb, err := tenet.Find[ormBook](ctx, em2, b.ID())
 	must(t, err)
 	if lb.author != ref {
 		t.Fatal("hydration must reuse the reference")
@@ -259,15 +259,15 @@ func testORMReferences(t *testing.T, db *dbal.DB) {
 		t.Fatal("Initialize must load the reference")
 	}
 	// Setting an association to a reference writes only the FK.
-	edRef, _ := smorm.Reference[ormAuthor](em2, ed.ID())
+	edRef, _ := tenet.Reference[ormAuthor](em2, ed.ID())
 	lb.author = edRef
 	must(t, em2.Flush(ctx))
-	check, err := smorm.Find[ormBook](ctx, newEM(), b.ID())
+	check, err := tenet.Find[ormBook](ctx, newEM(), b.ID())
 	must(t, err)
 	if check.author.ID() != ed.ID() {
 		t.Fatal("FK update via reference")
 	}
-	if _, err := smorm.Reference[ormAuthor](em2); err == nil {
+	if _, err := tenet.Reference[ormAuthor](em2); err == nil {
 		t.Fatal("wrong identifier count")
 	}
 }
@@ -284,7 +284,7 @@ func testORMCycles(t *testing.T, db *dbal.DB) {
 		must(t, em.Persist(c))
 	}
 	must(t, em.Flush(ctx))
-	got, err := smorm.Find[ormCategory](ctx, newEM(), leaf.ID)
+	got, err := tenet.Find[ormCategory](ctx, newEM(), leaf.ID)
 	must(t, err)
 	if got.Parent == nil || got.Parent.ID != child.ID {
 		t.Fatal("self reference")
@@ -297,12 +297,12 @@ func testORMCycles(t *testing.T, db *dbal.DB) {
 	must(t, em.Persist(b))
 	must(t, em.Flush(ctx))
 	em2 := newEM()
-	la, err := smorm.Find[ormPerson](ctx, em2, a.ID)
+	la, err := tenet.Find[ormPerson](ctx, em2, a.ID)
 	must(t, err)
 	if la.Friend == nil || la.Friend.ID != b.ID {
 		t.Fatal("deferred FK not written")
 	}
-	lb, err := smorm.Find[ormPerson](ctx, em2, b.ID)
+	lb, err := tenet.Find[ormPerson](ctx, em2, b.ID)
 	must(t, err)
 	if lb.Friend != la {
 		t.Fatal("cycle through identity map")
@@ -316,9 +316,9 @@ func testORMCycles(t *testing.T, db *dbal.DB) {
 	}
 	// Delete order parent/child.
 	em3 := newEM()
-	r, _ := smorm.Find[ormCategory](ctx, em3, root.ID)
-	c, _ := smorm.Find[ormCategory](ctx, em3, child.ID)
-	l, _ := smorm.Find[ormCategory](ctx, em3, leaf.ID)
+	r, _ := tenet.Find[ormCategory](ctx, em3, root.ID)
+	c, _ := tenet.Find[ormCategory](ctx, em3, child.ID)
+	l, _ := tenet.Find[ormCategory](ctx, em3, leaf.ID)
 	for _, x := range []*ormCategory{r, c, l} {
 		must(t, em3.Remove(x))
 	}
@@ -368,7 +368,7 @@ func testORMRefreshDetach(t *testing.T, db *dbal.DB) {
 		t.Fatal("removed new entity was inserted")
 	}
 	// Persist after remove keeps it.
-	l, err := smorm.Find[ormAuthor](ctx, em, a.ID())
+	l, err := tenet.Find[ormAuthor](ctx, em, a.ID())
 	must(t, err)
 	must(t, em.Remove(l))
 	must(t, em.Persist(l))
@@ -376,10 +376,10 @@ func testORMRefreshDetach(t *testing.T, db *dbal.DB) {
 	if n := Count(t, db, "orm_author"); n != 1 {
 		t.Fatal("re-persisted entity was deleted")
 	}
-	if _, err := smorm.Find[ormAuthor](ctx, em, int64(999999)); !errors.Is(err, smorm.ErrNotFound) {
+	if _, err := tenet.Find[ormAuthor](ctx, em, int64(999999)); !errors.Is(err, tenet.ErrNotFound) {
 		t.Fatal("not found")
 	}
-	if err := em.Persist(ormAuthor{}); !errors.Is(err, smorm.ErrNotEntity) {
+	if err := em.Persist(ormAuthor{}); !errors.Is(err, tenet.ErrNotEntity) {
 		t.Fatalf("non pointer: %v", err)
 	}
 }
@@ -395,7 +395,7 @@ func testORMFailures(t *testing.T, db *dbal.DB) {
 	if err := em.Flush(ctx); err == nil {
 		t.Fatal("unique violation expected")
 	}
-	if em.IsOpen() || !errors.Is(em.Persist(&ormAuthor{}), smorm.ErrClosed) || !errors.Is(em.Flush(ctx), smorm.ErrClosed) {
+	if em.IsOpen() || !errors.Is(em.Persist(&ormAuthor{}), tenet.ErrClosed) || !errors.Is(em.Flush(ctx), tenet.ErrClosed) {
 		t.Fatal("entity manager must be closed after a failed flush")
 	}
 	if n := Count(t, db, "orm_author"); n != 1 {
@@ -403,7 +403,7 @@ func testORMFailures(t *testing.T, db *dbal.DB) {
 	}
 	em2 := newEM()
 	boom := errors.New("boom")
-	err := em2.Transactional(ctx, func(ctx context.Context, em *smorm.EntityManager) error {
+	err := em2.Transactional(ctx, func(ctx context.Context, em *tenet.EntityManager) error {
 		must(t, em.Persist(&ormAuthor{name: "tx"}))
 		if err := em.Flush(ctx); err != nil {
 			return err
@@ -416,7 +416,7 @@ func testORMFailures(t *testing.T, db *dbal.DB) {
 	if n := Count(t, db, "orm_author"); n != 1 {
 		t.Fatal("Transactional must roll back")
 	}
-	must(t, em2.Transactional(ctx, func(ctx context.Context, em *smorm.EntityManager) error {
+	must(t, em2.Transactional(ctx, func(ctx context.Context, em *tenet.EntityManager) error {
 		return em.Persist(&ormAuthor{name: "committed"})
 	}))
 	if n := Count(t, db, "orm_author"); n != 2 {
@@ -445,12 +445,12 @@ func testORMGenerators(t *testing.T, db *dbal.DB) {
 		t.Fatal("missing application identifier must fail")
 	}
 	must(t, em.Flush(ctx))
-	got, err := smorm.Find[ormLine](ctx, newEM(), 1, 2)
+	got, err := tenet.Find[ormLine](ctx, newEM(), 1, 2)
 	must(t, err)
 	if got.Qty != 4 {
 		t.Fatalf("composite find = %+v", got)
 	}
-	if _, err := smorm.Find[ormLine](ctx, em, 1); err == nil {
+	if _, err := tenet.Find[ormLine](ctx, em, 1); err == nil {
 		t.Fatal("wrong identifier count")
 	}
 	// Identity-only entity (INSERT DEFAULT VALUES).

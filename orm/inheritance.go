@@ -8,8 +8,8 @@ import (
 	"reflect"
 	"unsafe"
 
-	"github.com/smatify/smorm/dbal"
-	"github.com/smatify/smorm/mapping"
+	"github.com/smatify/tenet/dbal"
+	"github.com/smatify/tenet/mapping"
 )
 
 // isA reports whether class is meta or one of its subclasses.

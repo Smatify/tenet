@@ -8,8 +8,8 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/smatify/smorm/dialect"
-	"github.com/smatify/smorm/uuid"
+	"github.com/smatify/tenet/dialect"
+	"github.com/smatify/tenet/uuid"
 )
 
 func builtins() []Type {

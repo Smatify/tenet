@@ -8,7 +8,7 @@ import (
 	"errors"
 	"sync/atomic"
 
-	"github.com/smatify/smorm/dialect"
+	"github.com/smatify/tenet/dialect"
 )
 
 // ErrTxDone is returned when committing or rolling back a finished transaction.

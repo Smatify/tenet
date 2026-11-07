@@ -1,13 +1,13 @@
 package entity
 
-import "github.com/smatify/smorm"
+import "github.com/smatify/tenet"
 
 // AuthorRepository holds custom queries for Author.
 type AuthorRepository struct {
-	*smorm.Repository[Author]
+	*tenet.Repository[Author]
 }
 
 // NewAuthorRepository returns the repository of Author.
-func NewAuthorRepository(em *smorm.EntityManager) *AuthorRepository {
-	return &AuthorRepository{smorm.RepositoryFor[Author](em)}
+func NewAuthorRepository(em *tenet.EntityManager) *AuthorRepository {
+	return &AuthorRepository{tenet.RepositoryFor[Author](em)}
 }

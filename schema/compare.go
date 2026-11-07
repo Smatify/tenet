@@ -5,7 +5,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/smatify/smorm/dialect"
+	"github.com/smatify/tenet/dialect"
 )
 
 // Diff describes how to turn one schema into another.
@@ -241,7 +241,7 @@ var (
 )
 
 // NormalizeDefault turns a default expression into a canonical form so values
-// written by smorm and values reported by the database compare equal.
+// written by tenet and values reported by the database compare equal.
 func NormalizeDefault(d dialect.Name, s string) string {
 	s = strings.TrimSpace(s)
 	for {

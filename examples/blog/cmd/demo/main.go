@@ -8,21 +8,21 @@ import (
 
 	_ "modernc.org/sqlite"
 
-	"github.com/smatify/smorm"
-	"github.com/smatify/smorm/dbal"
-	"github.com/smatify/smorm/dialect/sqlitedialect"
+	"github.com/smatify/tenet"
+	"github.com/smatify/tenet/dbal"
+	"github.com/smatify/tenet/dialect/sqlitedialect"
 
 	"example.com/blog/internal/entity"
 )
 
 func main() {
 	ctx := context.Background()
-	sqlDB, err := sql.Open("sqlite", os.Getenv("SMORM_DATABASE_URL"))
+	sqlDB, err := sql.Open("sqlite", os.Getenv("TENET_DATABASE_URL"))
 	if err != nil {
 		panic(err)
 	}
 	db := dbal.NewDB(sqlDB, sqlitedialect.New())
-	em := smorm.NewEntityManager(db, smorm.WithContext(ctx))
+	em := tenet.NewEntityManager(db, tenet.WithContext(ctx))
 
 	ann := (&entity.Author{}).SetName("Ann")
 	ann.AddPost((&entity.Post{}).SetTitle("Hello"))
@@ -39,8 +39,8 @@ func main() {
 		panic(err)
 	}
 
-	em2 := smorm.NewEntityManager(db, smorm.WithContext(ctx))
-	posts, err := entity.NewPostRepository(em2).FindBy(ctx, smorm.Criteria{"title": "World"})
+	em2 := tenet.NewEntityManager(db, tenet.WithContext(ctx))
+	posts, err := entity.NewPostRepository(em2).FindBy(ctx, tenet.Criteria{"title": "World"})
 	if err != nil {
 		panic(err)
 	}

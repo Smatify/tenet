@@ -3,9 +3,9 @@ module example.com/blog
 go 1.26.0
 
 require (
-	github.com/smatify/smorm v0.0.0
-	github.com/smatify/smorm/dialect/sqlitedialect v0.0.0
-	github.com/smatify/smorm/gen v0.0.0
+	github.com/smatify/tenet v0.0.0
+	github.com/smatify/tenet/dialect/sqlitedialect v0.0.0
+	github.com/smatify/tenet/gen v0.0.0
 	modernc.org/sqlite v1.60.1
 )
 
@@ -25,8 +25,8 @@ require (
 	modernc.org/memory v1.12.1 // indirect
 )
 
-replace github.com/smatify/smorm => ../..
+replace github.com/smatify/tenet => ../..
 
-replace github.com/smatify/smorm/gen => ../../gen
+replace github.com/smatify/tenet/gen => ../../gen
 
-replace github.com/smatify/smorm/dialect/sqlitedialect => ../../dialect/sqlitedialect
+replace github.com/smatify/tenet/dialect/sqlitedialect => ../../dialect/sqlitedialect

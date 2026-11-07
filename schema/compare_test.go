@@ -3,9 +3,9 @@ package schema
 import (
 	"testing"
 
-	"github.com/smatify/smorm/dialect"
-	"github.com/smatify/smorm/internal/testdialect"
-	"github.com/smatify/smorm/types"
+	"github.com/smatify/tenet/dialect"
+	"github.com/smatify/tenet/internal/testdialect"
+	"github.com/smatify/tenet/types"
 )
 
 func cmpFor(n dialect.Name) *Comparator { return NewComparator(testdialect.Like(n)) }

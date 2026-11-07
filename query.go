@@ -1,4 +1,4 @@
-package smorm
+package tenet
 
 import (
 	"context"
@@ -6,8 +6,8 @@ import (
 	"reflect"
 	"sort"
 
-	"github.com/smatify/smorm/dbal"
-	"github.com/smatify/smorm/orm"
+	"github.com/smatify/tenet/dbal"
+	"github.com/smatify/tenet/orm"
 )
 
 // Cond is a query condition.
@@ -257,7 +257,7 @@ func With(paths ...any) FindOption { return func(q *orm.Query) { q.With(paths...
 // Repository gives typed access to the entities of T, like Doctrine's
 // EntityRepository. Embed it in custom repositories:
 //
-//	type PostRepository struct{ *smorm.Repository[Post] }
+//	type PostRepository struct{ *tenet.Repository[Post] }
 type Repository[T any] struct{ em *EntityManager }
 
 // RepositoryFor returns the repository of T.

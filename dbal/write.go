@@ -6,7 +6,7 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/smatify/smorm/dialect"
+	"github.com/smatify/tenet/dialect"
 )
 
 var (

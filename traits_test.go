@@ -1,19 +1,19 @@
-package smorm
+package tenet
 
 import (
 	"slices"
 	"testing"
 	"time"
 
-	"github.com/smatify/smorm/mapping"
-	"github.com/smatify/smorm/types"
+	"github.com/smatify/tenet/mapping"
+	"github.com/smatify/tenet/types"
 )
 
 type traitUser struct {
-	Entity `smorm:"table:users"`
+	Entity `tenet:"table:users"`
 	IntID
 	Timestamps
-	email string `smorm:"length:180"`
+	email string `tenet:"length:180"`
 }
 
 type traitDoc struct {

@@ -10,35 +10,35 @@ import (
 	"testing"
 	"time"
 
-	"github.com/smatify/smorm/dbal"
-	"github.com/smatify/smorm/dialect"
-	"github.com/smatify/smorm/internal/entity"
-	"github.com/smatify/smorm/internal/fakedb"
-	"github.com/smatify/smorm/internal/testdialect"
-	"github.com/smatify/smorm/mapping"
+	"github.com/smatify/tenet/dbal"
+	"github.com/smatify/tenet/dialect"
+	"github.com/smatify/tenet/internal/entity"
+	"github.com/smatify/tenet/internal/fakedb"
+	"github.com/smatify/tenet/internal/testdialect"
+	"github.com/smatify/tenet/mapping"
 )
 
 type uAuthor struct {
-	entity.Header `smorm:"table:a"`
+	entity.Header `tenet:"table:a"`
 	ID            int64
 	Name          string
 }
 
 type uBook struct {
-	entity.Header `smorm:"table:b"`
-	ID            string   `smorm:"generated:none"`
-	Author        *uAuthor `smorm:"notnull"`
+	entity.Header `tenet:"table:b"`
+	ID            string   `tenet:"generated:none"`
+	Author        *uAuthor `tenet:"notnull"`
 	Prev          *uBook
 }
 
 type uNode struct {
-	entity.Header `smorm:"table:n"`
+	entity.Header `tenet:"table:n"`
 	ID            int64
-	Next          *uNode `smorm:"notnull"`
+	Next          *uNode `tenet:"notnull"`
 }
 
 type stamped struct {
-	entity.Header `smorm:"table:s"`
+	entity.Header `tenet:"table:s"`
 	ID            int64
 	Name          string
 	created       time.Time
@@ -291,7 +291,7 @@ func TestBatchInsert(t *testing.T) {
 }
 
 type hookedAuthor struct {
-	entity.Header `smorm:"table:ha"`
+	entity.Header `tenet:"table:ha"`
 	ID            int64
 	Name          string
 }

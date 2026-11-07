@@ -4,9 +4,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/smatify/smorm/dialect"
-	"github.com/smatify/smorm/internal/testdialect"
-	"github.com/smatify/smorm/types"
+	"github.com/smatify/tenet/dialect"
+	"github.com/smatify/tenet/internal/testdialect"
+	"github.com/smatify/tenet/types"
 )
 
 func ddlFor(n dialect.Name) *DDL { return NewDDL(testdialect.Like(n)) }

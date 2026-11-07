@@ -6,8 +6,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/smatify/smorm/gen/astedit"
-	"github.com/smatify/smorm/mapping"
+	"github.com/smatify/tenet/gen/astedit"
+	"github.com/smatify/tenet/mapping"
 )
 
 // ValueKind selects the doc comment of a value struct.

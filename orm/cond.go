@@ -8,9 +8,9 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/smatify/smorm/dbal"
-	"github.com/smatify/smorm/internal/entity"
-	"github.com/smatify/smorm/mapping"
+	"github.com/smatify/tenet/dbal"
+	"github.com/smatify/tenet/internal/entity"
+	"github.com/smatify/tenet/mapping"
 )
 
 // Cond is a query condition. Fields are referenced as "Name", "alias.Name"

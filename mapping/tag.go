@@ -5,7 +5,7 @@ import (
 	"strings"
 )
 
-// Tag is a parsed struct tag: `smorm:"column:email,unique,length:180"`.
+// Tag is a parsed struct tag: `tenet:"column:email,unique,length:180"`.
 // Options are comma separated; a value follows the first colon. Values may
 // be single-quoted to contain commas: default:'a,b'.
 type Tag struct {

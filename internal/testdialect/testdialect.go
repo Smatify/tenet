@@ -1,7 +1,7 @@
 // Package testdialect provides a configurable dialect for unit tests.
 package testdialect
 
-import "github.com/smatify/smorm/dialect"
+import "github.com/smatify/tenet/dialect"
 
 // Dialect is a generic ANSI-like dialect with configurable features.
 type Dialect struct {

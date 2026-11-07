@@ -7,8 +7,8 @@ import (
 	"reflect"
 	"strings"
 
-	"github.com/smatify/smorm/dbal"
-	"github.com/smatify/smorm/mapping"
+	"github.com/smatify/tenet/dbal"
+	"github.com/smatify/tenet/mapping"
 )
 
 // preloadChunk limits the number of identifiers per IN list.

@@ -1,7 +1,7 @@
-// Command smorm sets up projects and regenerates entity code:
+// Command tenet sets up projects and regenerates entity code:
 //
-//	smorm init --dialect postgres
-//	smorm generate [--accessors [--entity A,B]] [dir...]
+//	tenet init --dialect postgres
+//	tenet generate [--accessors [--entity A,B]] [dir...]
 package main
 
 import (
@@ -11,11 +11,11 @@ import (
 	"os"
 	"strings"
 
-	"github.com/smatify/smorm/gen"
-	"github.com/smatify/smorm/gen/maker"
-	"github.com/smatify/smorm/gen/rename"
-	"github.com/smatify/smorm/gen/scaffold"
-	"github.com/smatify/smorm/internal/brand"
+	"github.com/smatify/tenet/gen"
+	"github.com/smatify/tenet/gen/maker"
+	"github.com/smatify/tenet/gen/rename"
+	"github.com/smatify/tenet/gen/scaffold"
+	"github.com/smatify/tenet/internal/brand"
 )
 
 func main() { os.Exit(run(os.Args[1:], os.Stdout, os.Stderr)) }

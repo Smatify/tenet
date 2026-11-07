@@ -8,11 +8,11 @@ import (
 	"slices"
 	"time"
 
-	"github.com/smatify/smorm/dbal"
-	"github.com/smatify/smorm/dialect"
-	"github.com/smatify/smorm/mapping"
-	"github.com/smatify/smorm/types"
-	"github.com/smatify/smorm/uuid"
+	"github.com/smatify/tenet/dbal"
+	"github.com/smatify/tenet/dialect"
+	"github.com/smatify/tenet/mapping"
+	"github.com/smatify/tenet/types"
+	"github.com/smatify/tenet/uuid"
 )
 
 // fieldDBValue returns the database value of field f of e, resolving join

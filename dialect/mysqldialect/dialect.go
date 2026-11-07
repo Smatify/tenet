@@ -3,7 +3,7 @@ package mysqldialect
 import (
 	"strings"
 
-	"github.com/smatify/smorm/dialect"
+	"github.com/smatify/tenet/dialect"
 )
 
 // Dialect is the MySQL / MariaDB dialect.

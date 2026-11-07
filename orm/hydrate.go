@@ -7,8 +7,8 @@ import (
 	"reflect"
 	"sync"
 
-	"github.com/smatify/smorm/dbal"
-	"github.com/smatify/smorm/mapping"
+	"github.com/smatify/tenet/dbal"
+	"github.com/smatify/tenet/mapping"
 )
 
 // whereID adds "id = ?" conditions for the identifier values.

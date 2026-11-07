@@ -5,27 +5,27 @@ import (
 	"database/sql"
 	"fmt"
 
-	"github.com/smatify/smorm"
-	"github.com/smatify/smorm/dbal"
-	"github.com/smatify/smorm/dialect/pgdialect"
+	"github.com/smatify/tenet"
+	"github.com/smatify/tenet/dbal"
+	"github.com/smatify/tenet/dialect/pgdialect"
 
-	"github.com/smatify/smorm/bench/model"
+	"github.com/smatify/tenet/bench/model"
 )
 
 func init() {
 	var sdb *dbal.DB
 	setups = append(setups, func(db *sql.DB) error { sdb = dbal.NewDB(db, pgdialect.New()); return nil })
-	newEM := func(ctx context.Context) *smorm.EntityManager {
-		return smorm.NewEntityManager(sdb, smorm.WithContext(ctx))
+	newEM := func(ctx context.Context) *tenet.EntityManager {
+		return tenet.NewEntityManager(sdb, tenet.WithContext(ctx))
 	}
-	first100 := func(ctx context.Context, em *smorm.EntityManager, with ...any) ([]*model.Post, error) {
-		return smorm.NewQuery[model.Post](em).With(with...).OrderBy(model.PostFields.ID, smorm.Asc).Limit(100).All(ctx)
+	first100 := func(ctx context.Context, em *tenet.EntityManager, with ...any) ([]*model.Post, error) {
+		return tenet.NewQuery[model.Post](em).With(with...).OrderBy(model.PostFields.ID, tenet.Asc).Limit(100).All(ctx)
 	}
 	impls = append(impls, impl{
-		name: "smorm",
+		name: "tenet",
 		insert: func(ctx context.Context, n int) error {
 			em := newEM(ctx)
-			author, err := smorm.Reference[model.Author](em, int64(1))
+			author, err := tenet.Reference[model.Author](em, int64(1))
 			if err != nil {
 				return err
 			}
@@ -37,7 +37,7 @@ func init() {
 			return em.Flush(ctx)
 		},
 		find: func(ctx context.Context, id int64) (string, error) {
-			p, err := smorm.Find[model.Post](ctx, newEM(ctx), id)
+			p, err := tenet.Find[model.Post](ctx, newEM(ctx), id)
 			if err != nil {
 				return "", err
 			}

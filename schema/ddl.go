@@ -5,8 +5,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/smatify/smorm/dialect"
-	"github.com/smatify/smorm/types"
+	"github.com/smatify/tenet/dialect"
+	"github.com/smatify/tenet/types"
 )
 
 // DDL generates schema statements for a dialect.

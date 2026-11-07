@@ -7,10 +7,10 @@ import (
 	"time"
 	"weak"
 
-	"github.com/smatify/smorm/cache"
-	"github.com/smatify/smorm/dbal"
-	"github.com/smatify/smorm/internal/entity"
-	"github.com/smatify/smorm/mapping"
+	"github.com/smatify/tenet/cache"
+	"github.com/smatify/tenet/dbal"
+	"github.com/smatify/tenet/internal/entity"
+	"github.com/smatify/tenet/mapping"
 )
 
 // EntityManager tracks entities and writes their changes on Flush. Like

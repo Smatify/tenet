@@ -11,10 +11,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/smatify/smorm/internal/brand"
-	"github.com/smatify/smorm/schema"
-	"github.com/smatify/smorm/types"
-	"github.com/smatify/smorm/uuid"
+	"github.com/smatify/tenet/internal/brand"
+	"github.com/smatify/tenet/schema"
+	"github.com/smatify/tenet/types"
+	"github.com/smatify/tenet/uuid"
 )
 
 // Registry parses and caches entity metadata. It is safe for concurrent use.

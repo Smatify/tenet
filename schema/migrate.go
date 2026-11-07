@@ -5,8 +5,8 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/smatify/smorm/dialect"
-	"github.com/smatify/smorm/types"
+	"github.com/smatify/tenet/dialect"
+	"github.com/smatify/tenet/types"
 )
 
 // SQLiteRebuildPrefix prefixes the temporary table used when SQLite has to

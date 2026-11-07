@@ -5,12 +5,12 @@ package enttest
 import (
 	"context"
 
-	"github.com/smatify/smorm/bench/ent"
+	"github.com/smatify/tenet/bench/ent"
 	// required by schema hooks.
-	_ "github.com/smatify/smorm/bench/ent/runtime"
+	_ "github.com/smatify/tenet/bench/ent/runtime"
 
 	"entgo.io/ent/dialect/sql/schema"
-	"github.com/smatify/smorm/bench/ent/migrate"
+	"github.com/smatify/tenet/bench/ent/migrate"
 )
 
 type (

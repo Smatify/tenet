@@ -8,11 +8,11 @@ import (
 	"sync"
 	"time"
 
-	"github.com/smatify/smorm/internal/entity"
-	"github.com/smatify/smorm/types"
+	"github.com/smatify/tenet/internal/entity"
+	"github.com/smatify/tenet/types"
 )
 
-// HeaderType is the type every entity embeds (re-exported as smorm.Entity).
+// HeaderType is the type every entity embeds (re-exported as tenet.Entity).
 var HeaderType = reflect.TypeFor[entity.Header]()
 
 // Generator is an identifier generation strategy.
@@ -220,8 +220,8 @@ type Container int
 // Containers.
 const (
 	ContainerPointer    Container = iota + 1 // *User (Doctrine style, proxy stubs)
-	ContainerRef                             // smorm.Ref[User] (Go style)
-	ContainerCollection                      // smorm.Collection[Post]
+	ContainerRef                             // tenet.Ref[User] (Go style)
+	ContainerCollection                      // tenet.Collection[Post]
 	ContainerSlice                           // []*Post (eager only)
 )
 
@@ -314,11 +314,11 @@ type IndexDef struct {
 }
 
 // CollectionField is implemented by collection container types such as
-// smorm.Collection[T]; CollectionElem returns T.
+// tenet.Collection[T]; CollectionElem returns T.
 type CollectionField interface{ CollectionElem() reflect.Type }
 
 // RefField is implemented by single reference containers such as
-// smorm.Ref[T]; RefElem returns T.
+// tenet.Ref[T]; RefElem returns T.
 type RefField interface{ RefElem() reflect.Type }
 
 // CreatedToucher is implemented by entities (usually through the Timestamps

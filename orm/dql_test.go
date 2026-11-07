@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/smatify/smorm/dialect"
+	"github.com/smatify/tenet/dialect"
 )
 
 func dqlSQL(t *testing.T, em *EntityManager, dql string, params map[string]any) string {

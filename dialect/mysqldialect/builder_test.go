@@ -4,8 +4,8 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/smatify/smorm/dbal"
-	"github.com/smatify/smorm/internal/fakedb"
+	"github.com/smatify/tenet/dbal"
+	"github.com/smatify/tenet/internal/fakedb"
 )
 
 func builderDB(t *testing.T, d *Dialect) *dbal.DB {

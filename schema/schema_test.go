@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/smatify/smorm/types"
+	"github.com/smatify/tenet/types"
 )
 
 func buildBlog() *Schema {

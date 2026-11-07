@@ -11,7 +11,7 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/smatify/smorm/types"
+	"github.com/smatify/tenet/types"
 )
 
 // Schema is a set of tables and sequences.
@@ -271,7 +271,7 @@ type Column struct {
 	Default       *string // raw SQL expression, nil means no default
 	AutoIncrement bool
 	Comment       string
-	// RawType is a verbatim SQL type used for database types smorm does not
+	// RawType is a verbatim SQL type used for database types tenet does not
 	// map (filled by introspection). It takes precedence over Type.
 	RawType string
 	// DefaultName is the name of the default constraint on SQL Server when it

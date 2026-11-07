@@ -5,9 +5,9 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/smatify/smorm"
-	"github.com/smatify/smorm/dbal"
-	"github.com/smatify/smorm/dialect"
+	"github.com/smatify/tenet"
+	"github.com/smatify/tenet/dbal"
+	"github.com/smatify/tenet/dialect"
 )
 
 func init() { Register(Case{"ORM/BulkUpdate", testORMBulkUpdate}) }
@@ -29,14 +29,14 @@ func testORMBulkUpdate(t *testing.T, db *dbal.DB) {
 	must(t, em.Flush(ctx))
 
 	var bulk [][]any
-	em.Events().On(func(_ context.Context, a *smorm.EventArgs) error {
+	em.Events().On(func(_ context.Context, a *tenet.EventArgs) error {
 		bulk = append(bulk, a.IDs)
 		return nil
-	}, smorm.EventPostBulk)
+	}, tenet.EventPostBulk)
 	returns := db.Dialect().Features().Has(dialect.FeatureReturning)
 
 	// An expression of the row itself (score is NULL for 0: nullzero).
-	n, err := smorm.Update[ormAuthor](em).Set("score", smorm.Raw("COALESCE({score}, 0) + ?", 5)).Where(smorm.In("name", []string{"ann", "bob"})).Exec(ctx)
+	n, err := tenet.Update[ormAuthor](em).Set("score", tenet.Raw("COALESCE({score}, 0) + ?", 5)).Where(tenet.In("name", []string{"ann", "bob"})).Exec(ctx)
 	must(t, err)
 	if n != 2 || len(bulk) != 1 {
 		t.Fatalf("updated %d rows, %d events", n, len(bulk))
@@ -46,7 +46,7 @@ func testORMBulkUpdate(t *testing.T, db *dbal.DB) {
 	}
 	scores := func() map[string]int {
 		out := map[string]int{}
-		all, err := smorm.NewQuery[ormAuthor](newEM()).All(ctx)
+		all, err := tenet.NewQuery[ormAuthor](newEM()).All(ctx)
 		must(t, err)
 		for _, a := range all {
 			out[a.name] = a.score
@@ -56,17 +56,17 @@ func testORMBulkUpdate(t *testing.T, db *dbal.DB) {
 	if got := scores(); got["ann"] != 5 || got["bob"] != 5 || got["cid"] != 0 {
 		t.Fatalf("scores %v", got)
 	}
-	if n, err := smorm.Update[ormAuthor](em).Set("score", 1).Where(smorm.Eq("name", "nobody")).Exec(ctx); err != nil || n != 0 || (returns && len(bulk) != 1) {
+	if n, err := tenet.Update[ormAuthor](em).Set("score", 1).Where(tenet.Eq("name", "nobody")).Exec(ctx); err != nil || n != 0 || (returns && len(bulk) != 1) {
 		t.Fatalf("an update of no rows: %d rows, %d events (%v)", n, len(bulk), err)
 	}
-	if _, err := smorm.Update[ormAuthor](em).Set("score", 1).Exec(ctx); err == nil {
+	if _, err := tenet.Update[ormAuthor](em).Set("score", 1).Exec(ctx); err == nil {
 		t.Fatal("an update without condition must fail")
 	}
 
 	// Values from a sub query (UPDATE … FROM): the number of books.
-	counts := smorm.NewQuery[ormAuthor](em).LeftJoinOn(ormBook{}, "b", smorm.Raw("{b.author} = {id}")).
+	counts := tenet.NewQuery[ormAuthor](em).LeftJoinOn(ormBook{}, "b", tenet.Raw("{b.author} = {id}")).
 		Columns("{id} AS id", "count({b.id}) AS n").GroupBy("{id}")
-	upd := smorm.Update[ormAuthor](em).From(counts.Sub(), "v").Set("score", smorm.Raw("v.n")).Where(smorm.Raw("{id} = v.id"))
+	upd := tenet.Update[ormAuthor](em).From(counts.Sub(), "v").Set("score", tenet.Raw("v.n")).Where(tenet.Raw("{id} = v.id"))
 	if d := db.Dialect().Name(); d != dialect.Postgres && d != dialect.SQLite {
 		if _, err := upd.Exec(ctx); err == nil {
 			t.Fatal("UPDATE … FROM must fail on " + string(d))
@@ -85,8 +85,8 @@ func testORMBulkUpdate(t *testing.T, db *dbal.DB) {
 	// Inside a transaction the event waits for the commit, and a rollback
 	// drops it.
 	bulk = nil
-	err = em.Transactional(ctx, func(ctx context.Context, em *smorm.EntityManager) error {
-		if _, err := smorm.Update[ormAuthor](em).Set("score", 9).Where(smorm.Eq("name", "cid")).Exec(ctx); err != nil {
+	err = em.Transactional(ctx, func(ctx context.Context, em *tenet.EntityManager) error {
+		if _, err := tenet.Update[ormAuthor](em).Set("score", 9).Where(tenet.Eq("name", "cid")).Exec(ctx); err != nil {
 			return err
 		}
 		if len(bulk) != 0 {
@@ -99,8 +99,8 @@ func testORMBulkUpdate(t *testing.T, db *dbal.DB) {
 		t.Fatalf("%d events after the commit", len(bulk))
 	}
 	bulk = nil
-	_ = em.Transactional(ctx, func(ctx context.Context, em *smorm.EntityManager) error {
-		if _, err := smorm.Update[ormAuthor](em).Set("score", 7).Where(smorm.Eq("name", "cid")).Exec(ctx); err != nil {
+	_ = em.Transactional(ctx, func(ctx context.Context, em *tenet.EntityManager) error {
+		if _, err := tenet.Update[ormAuthor](em).Set("score", 7).Where(tenet.Eq("name", "cid")).Exec(ctx); err != nil {
 			return err
 		}
 		return context.Canceled
@@ -117,21 +117,21 @@ func testORMBulkInsert(t *testing.T, db *dbal.DB) {
 	newEM := setupORM(t, db)
 	em := newEM()
 	var events int
-	em.Events().On(func(context.Context, *smorm.EventArgs) error { events++; return nil }, smorm.EventPostBulk)
+	em.Events().On(func(context.Context, *tenet.EventArgs) error { events++; return nil }, tenet.EventPostBulk)
 	if d := db.Dialect().Name(); d != dialect.Postgres && d != dialect.SQLite {
-		if _, err := smorm.Insert[ormAuthor](em).Rows(&ormAuthor{name: "ann"}).Exec(ctx); err == nil {
+		if _, err := tenet.Insert[ormAuthor](em).Rows(&ormAuthor{name: "ann"}).Exec(ctx); err == nil {
 			t.Fatal("bulk inserts must fail on " + string(d))
 		}
 		return
 	}
-	n, err := smorm.Insert[ormAuthor](em).Rows(&ormAuthor{name: "ann", score: 1}, &ormAuthor{name: "bob", score: 2}).Exec(ctx)
+	n, err := tenet.Insert[ormAuthor](em).Rows(&ormAuthor{name: "ann", score: 1}, &ormAuthor{name: "bob", score: 2}).Exec(ctx)
 	must(t, err)
 	if n != 2 || events != 1 {
 		t.Fatalf("inserted %d rows, %d events", n, events)
 	}
 	scores := func() map[string]int {
 		out := map[string]int{}
-		all, err := smorm.NewQuery[ormAuthor](newEM()).All(ctx)
+		all, err := tenet.NewQuery[ormAuthor](newEM()).All(ctx)
 		must(t, err)
 		for _, a := range all {
 			out[a.name] = a.score
@@ -142,13 +142,13 @@ func testORMBulkInsert(t *testing.T, db *dbal.DB) {
 		return out
 	}
 	// An upsert adds the proposed score to the existing one.
-	n, err = smorm.Insert[ormAuthor](em).Rows(&ormAuthor{name: "ann", score: 10}, &ormAuthor{name: "cid", score: 3}).
-		OnConflict("name").Set("score", smorm.Raw("COALESCE({score}, 0) + COALESCE({excluded.score}, 0)")).Exec(ctx)
+	n, err = tenet.Insert[ormAuthor](em).Rows(&ormAuthor{name: "ann", score: 10}, &ormAuthor{name: "cid", score: 3}).
+		OnConflict("name").Set("score", tenet.Raw("COALESCE({score}, 0) + COALESCE({excluded.score}, 0)")).Exec(ctx)
 	must(t, err)
 	if got := scores(); n != 2 || got["ann"] != 11 || got["bob"] != 2 || got["cid"] != 3 {
 		t.Fatalf("upsert of %d rows: %v", n, got)
 	}
-	n, err = smorm.Insert[ormAuthor](em).Rows(&ormAuthor{name: "bob", score: 9}).OnConflict("name").DoNothing().Exec(ctx)
+	n, err = tenet.Insert[ormAuthor](em).Rows(&ormAuthor{name: "bob", score: 9}).OnConflict("name").DoNothing().Exec(ctx)
 	must(t, err)
 	if got := scores(); n != 0 || got["bob"] != 2 {
 		t.Fatalf("do nothing wrote %d rows: %v", n, got)
@@ -156,12 +156,12 @@ func testORMBulkInsert(t *testing.T, db *dbal.DB) {
 
 	// INSERT … SELECT: a category per author, not twice (NOT EXISTS of the
 	// sub query refers to the outer query by its alias).
-	missing := func() *smorm.Query[ormAuthor] {
-		has := smorm.NewQuery[ormCategory](em).Column("1").Where(smorm.Raw("{Name} = a.name"))
-		return smorm.NewQuery[ormAuthor](em).As("a").Columns("{a.name}").Where(smorm.Raw("NOT EXISTS ?", has.Sub()))
+	missing := func() *tenet.Query[ormAuthor] {
+		has := tenet.NewQuery[ormCategory](em).Column("1").Where(tenet.Raw("{Name} = a.name"))
+		return tenet.NewQuery[ormAuthor](em).As("a").Columns("{a.name}").Where(tenet.Raw("NOT EXISTS ?", has.Sub()))
 	}
 	for run, want := range []int{3, 0} {
-		n, err = smorm.Insert[ormCategory](em).Select(missing(), "Name").Exec(ctx)
+		n, err = tenet.Insert[ormCategory](em).Select(missing(), "Name").Exec(ctx)
 		must(t, err)
 		if n != want {
 			t.Fatalf("run %d inserted %d categories, want %d", run, n, want)
@@ -180,11 +180,11 @@ func testORMBulkDelete(t *testing.T, db *dbal.DB) {
 	}
 	must(t, em.Flush(ctx))
 	var ids [][]any
-	em.Events().On(func(_ context.Context, a *smorm.EventArgs) error { ids = append(ids, a.IDs); return nil }, smorm.EventPostBulk)
-	if _, err := smorm.Delete[ormAuthor](em).Exec(ctx); err == nil {
+	em.Events().On(func(_ context.Context, a *tenet.EventArgs) error { ids = append(ids, a.IDs); return nil }, tenet.EventPostBulk)
+	if _, err := tenet.Delete[ormAuthor](em).Exec(ctx); err == nil {
 		t.Fatal("a delete without condition must fail")
 	}
-	n, err := smorm.Delete[ormAuthor](em).Where(smorm.In("name", []string{"ann", "bob"})).Exec(ctx)
+	n, err := tenet.Delete[ormAuthor](em).Where(tenet.In("name", []string{"ann", "bob"})).Exec(ctx)
 	must(t, err)
 	if n != 2 || len(ids) != 1 {
 		t.Fatalf("deleted %d rows, %d events", n, len(ids))
@@ -192,10 +192,10 @@ func testORMBulkDelete(t *testing.T, db *dbal.DB) {
 	if db.Dialect().Features().Has(dialect.FeatureReturning) && len(ids[0]) != 2 {
 		t.Fatalf("event IDs %v", ids[0])
 	}
-	if n, err := smorm.Delete[ormAuthor](em).Where(smorm.Eq("name", "nobody")).Exec(ctx); err != nil || n != 0 || len(ids) != 1 {
+	if n, err := tenet.Delete[ormAuthor](em).Where(tenet.Eq("name", "nobody")).Exec(ctx); err != nil || n != 0 || len(ids) != 1 {
 		t.Fatalf("deleting nothing: %d rows, %d events (%v)", n, len(ids), err)
 	}
-	left, err := smorm.NewQuery[ormAuthor](newEM()).All(ctx)
+	left, err := tenet.NewQuery[ormAuthor](newEM()).All(ctx)
 	must(t, err)
 	if len(left) != 1 || left[0].name != "cid" {
 		t.Fatalf("left %v", left)

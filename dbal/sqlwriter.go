@@ -7,7 +7,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/smatify/smorm/dialect"
+	"github.com/smatify/tenet/dialect"
 )
 
 // Expr is anything that can render itself as SQL.

@@ -6,38 +6,38 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/smatify/smorm/dbal"
-	"github.com/smatify/smorm/dialect"
-	"github.com/smatify/smorm/internal/entity"
-	"github.com/smatify/smorm/mapping"
+	"github.com/smatify/tenet/dbal"
+	"github.com/smatify/tenet/dialect"
+	"github.com/smatify/tenet/internal/entity"
+	"github.com/smatify/tenet/mapping"
 )
 
 type qAuthor struct {
-	entity.Header `smorm:"table:qa"`
+	entity.Header `tenet:"table:qa"`
 	ID            int64
 	Name          string
-	Books         Collection[qBook] `smorm:"oneToMany,mappedBy:Author"`
-	Tags          Collection[qTag]  `smorm:"manyToMany"`
-	Profile       *qProfile         `smorm:"oneToOne,mappedBy:Author"`
+	Books         Collection[qBook] `tenet:"oneToMany,mappedBy:Author"`
+	Tags          Collection[qTag]  `tenet:"manyToMany"`
+	Profile       *qProfile         `tenet:"oneToOne,mappedBy:Author"`
 }
 
 type qBook struct {
-	entity.Header `smorm:"table:qb"`
+	entity.Header `tenet:"table:qb"`
 	ID            int64
 	Title         string
-	Author        *qAuthor `smorm:"inversedBy:Books"`
+	Author        *qAuthor `tenet:"inversedBy:Books"`
 }
 
 type qTag struct {
-	entity.Header `smorm:"table:qt"`
+	entity.Header `tenet:"table:qt"`
 	ID            int64
 	Label         string
 }
 
 type qProfile struct {
-	entity.Header `smorm:"table:qp"`
+	entity.Header `tenet:"table:qp"`
 	ID            int64
-	Author        *qAuthor `smorm:"oneToOne,inversedBy:Profile"`
+	Author        *qAuthor `tenet:"oneToOne,inversedBy:Profile"`
 }
 
 func queryEM(t *testing.T) *EntityManager {

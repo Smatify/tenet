@@ -5,9 +5,9 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/smatify/smorm"
-	"github.com/smatify/smorm/dbal"
-	"github.com/smatify/smorm/dialect"
+	"github.com/smatify/tenet"
+	"github.com/smatify/tenet/dbal"
+	"github.com/smatify/tenet/dialect"
 )
 
 func init() { Register(Case{"ORM/Scan", testORMScan}) }
@@ -28,19 +28,19 @@ func testORMScan(t *testing.T, db *dbal.DB) {
 		Name  string
 		Books int `db:"n"`
 	}
-	got, err := smorm.Scan[count](ctx, smorm.NewQuery[ormAuthor](em).LeftJoinOn(ormBook{}, "b", smorm.Raw("{b.author} = {id}")).
-		Columns("{name} AS name", "count({b.id}) AS n").GroupBy("{name}").OrderBy(smorm.Raw("{name}"), smorm.Asc))
+	got, err := tenet.Scan[count](ctx, tenet.NewQuery[ormAuthor](em).LeftJoinOn(ormBook{}, "b", tenet.Raw("{b.author} = {id}")).
+		Columns("{name} AS name", "count({b.id}) AS n").GroupBy("{name}").OrderBy(tenet.Raw("{name}"), tenet.Asc))
 	must(t, err)
 	if want := []count{{"ann", 2}, {"bob", 1}, {"cid", 0}}; !slices.Equal(got, want) {
 		t.Fatalf("counts %v", got)
 	}
-	names, err := smorm.Scan[string](ctx, smorm.NewQuery[ormBook](em).Join("author", "a").Columns("{a.name}").Distinct())
+	names, err := tenet.Scan[string](ctx, tenet.NewQuery[ormBook](em).Join("author", "a").Columns("{a.name}").Distinct())
 	must(t, err)
 	slices.Sort(names)
 	if !slices.Equal(names, []string{"ann", "bob"}) {
 		t.Fatalf("distinct names %v", names)
 	}
-	if _, err := smorm.Scan[count](ctx, smorm.NewQuery[ormAuthor](em).Columns("{name} AS other")); err == nil {
+	if _, err := tenet.Scan[count](ctx, tenet.NewQuery[ormAuthor](em).Columns("{name} AS other")); err == nil {
 		t.Fatal("a column without field must fail")
 	}
 }
@@ -63,11 +63,11 @@ func testORMJoinSub(t *testing.T, db *dbal.DB) {
 		Books int
 		Last  *string
 	}
-	counts := smorm.NewQuery[ormBook](em).Columns("{author} AS author_id", "count(*) AS n").GroupBy("{author}")
-	last := smorm.NewQuery[ormBook](em).Columns("{title} AS title").Where(smorm.Raw("{author} = a.id")).OrderBy("title", smorm.Desc).Limit(1)
-	q := smorm.NewQuery[ormAuthor](em).As("a").LeftJoinSub(counts.Sub(), "n", smorm.Raw("n.author_id = {a.id}")).
-		LeftJoinLateral(last.Sub(), "l").Columns("{a.name} AS name", "COALESCE(n.n, 0) AS books", "l.title AS last").OrderBy("a.name", smorm.Asc)
-	got, err := smorm.Scan[row](ctx, q)
+	counts := tenet.NewQuery[ormBook](em).Columns("{author} AS author_id", "count(*) AS n").GroupBy("{author}")
+	last := tenet.NewQuery[ormBook](em).Columns("{title} AS title").Where(tenet.Raw("{author} = a.id")).OrderBy("title", tenet.Desc).Limit(1)
+	q := tenet.NewQuery[ormAuthor](em).As("a").LeftJoinSub(counts.Sub(), "n", tenet.Raw("n.author_id = {a.id}")).
+		LeftJoinLateral(last.Sub(), "l").Columns("{a.name} AS name", "COALESCE(n.n, 0) AS books", "l.title AS last").OrderBy("a.name", tenet.Asc)
+	got, err := tenet.Scan[row](ctx, q)
 	if db.Dialect().Name() != dialect.Postgres {
 		if err == nil {
 			t.Fatal("JOIN LATERAL must fail on " + string(db.Dialect().Name()))

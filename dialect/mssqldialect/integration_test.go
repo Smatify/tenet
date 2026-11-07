@@ -10,9 +10,9 @@ import (
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/modules/mssql"
 
-	"github.com/smatify/smorm/dbal"
-	"github.com/smatify/smorm/dbtest"
-	"github.com/smatify/smorm/internal/brand"
+	"github.com/smatify/tenet/dbal"
+	"github.com/smatify/tenet/dbtest"
+	"github.com/smatify/tenet/internal/brand"
 )
 
 var (

@@ -6,7 +6,7 @@ import (
 	"slices"
 	"strconv"
 
-	"github.com/smatify/smorm/dialect"
+	"github.com/smatify/tenet/dialect"
 )
 
 type cte struct {

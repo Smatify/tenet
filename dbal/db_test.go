@@ -7,9 +7,9 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/smatify/smorm/dialect"
-	"github.com/smatify/smorm/internal/fakedb"
-	"github.com/smatify/smorm/internal/testdialect"
+	"github.com/smatify/tenet/dialect"
+	"github.com/smatify/tenet/internal/fakedb"
+	"github.com/smatify/tenet/internal/testdialect"
 )
 
 func newTestDB(t *testing.T, opts ...Option) (*DB, *fakedb.Recorder) {

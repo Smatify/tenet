@@ -1,9 +1,9 @@
-module github.com/smatify/smorm/dialect/sqlitedialect
+module github.com/smatify/tenet/dialect/sqlitedialect
 
 go 1.26.0
 
 require (
-	github.com/smatify/smorm v0.0.0
+	github.com/smatify/tenet v0.0.0
 	modernc.org/sqlite v1.60.1
 )
 
@@ -19,4 +19,4 @@ require (
 	modernc.org/memory v1.12.1 // indirect
 )
 
-replace github.com/smatify/smorm => ../..
+replace github.com/smatify/tenet => ../..

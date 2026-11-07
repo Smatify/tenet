@@ -1,10 +1,10 @@
-module github.com/smatify/smorm/dialect/mssqldialect
+module github.com/smatify/tenet/dialect/mssqldialect
 
 go 1.26.0
 
 require (
 	github.com/microsoft/go-mssqldb v1.11.2
-	github.com/smatify/smorm v0.0.0
+	github.com/smatify/tenet v0.0.0
 	github.com/testcontainers/testcontainers-go v0.44.0
 	github.com/testcontainers/testcontainers-go/modules/mssql v0.44.0
 )
@@ -64,4 +64,4 @@ require (
 	golang.org/x/text v0.41.0 // indirect
 )
 
-replace github.com/smatify/smorm => ../..
+replace github.com/smatify/tenet => ../..

@@ -1,18 +1,18 @@
-package smorm
+package tenet
 
 import (
 	"context"
 	"errors"
 	"net/http"
 
-	"github.com/smatify/smorm/internal/entity"
-	"github.com/smatify/smorm/orm"
+	"github.com/smatify/tenet/internal/entity"
+	"github.com/smatify/tenet/orm"
 )
 
 // Touch loads p if it is an uninitialized reference (a proxy). Getters of
 // entities call it before reading a field:
 //
-//	func (p *Post) Title() string { smorm.Touch(p); return p.title }
+//	func (p *Post) Title() string { tenet.Touch(p); return p.title }
 //
 // If loading fails, Touch panics with *LazyLoadError; see CatchLazy and
 // RecoverLazyLoad.

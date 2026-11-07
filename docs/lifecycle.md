@@ -5,7 +5,7 @@
 - An `EntityManager` is a unit of work: an identity map of the loaded
   entities and the changes to write. It is **not safe for concurrent use**;
   create one per HTTP request, job or goroutine.
-- It stores a context (`smorm.WithContext(ctx)`, `em.SetContext(ctx)`) for
+- It stores a context (`tenet.WithContext(ctx)`, `em.SetContext(ctx)`) for
   lazy loading, because getters take no context. Methods with a `ctx`
   argument use that one for the call itself.
 - A failed `Flush` closes it (`IsOpen()` is false, everything returns
@@ -32,9 +32,9 @@
 
 ## Identifiers
 
-- `Persist` assigns UUID identifiers (`smorm.UUIDID`, `generated:uuid7`)
+- `Persist` assigns UUID identifiers (`tenet.UUIDID`, `generated:uuid7`)
   immediately, so a new entity can be referenced by ID before the flush.
-- Integer identities (`smorm.IntID`), sequences and `generated:identity`
+- Integer identities (`tenet.IntID`), sequences and `generated:identity`
   fields get their value from the database during `Flush`.
 
 ## Order within Flush
@@ -70,8 +70,8 @@ Entities may implement hooks (`PrePersist(ctx) error`, `PreUpdate(ctx, *ChangeSe
 `EventManager`, which many entity managers share:
 
 ```go
-events := smorm.NewEventManager()
-em := smorm.NewEntityManager(db, smorm.WithContext(ctx), smorm.WithEvents(events))
+events := tenet.NewEventManager()
+em := tenet.NewEntityManager(db, tenet.WithContext(ctx), tenet.WithEvents(events))
 ```
 
 Listeners get the entity manager in `args.EM`. Work that must only happen
@@ -81,29 +81,29 @@ keyed by the entity manager, and forgets on `onRollback`:
 
 ```go
 var mu sync.Mutex
-changed := map[*smorm.EntityManager][]any{}
+changed := map[*tenet.EntityManager][]any{}
 
-events.On(func(ctx context.Context, a *smorm.EventArgs) error {
+events.On(func(ctx context.Context, a *tenet.EventArgs) error {
 	mu.Lock()
 	defer mu.Unlock()
 	changed[a.EM] = append(changed[a.EM], a.Entity)
 	return nil
-}, smorm.EventPostPersist, smorm.EventPostUpdate, smorm.EventPostRemove)
+}, tenet.EventPostPersist, tenet.EventPostUpdate, tenet.EventPostRemove)
 
-events.On(func(ctx context.Context, a *smorm.EventArgs) error {
+events.On(func(ctx context.Context, a *tenet.EventArgs) error {
 	mu.Lock()
 	items := changed[a.EM]
 	delete(changed, a.EM)
 	mu.Unlock()
 	return index.Update(ctx, items) // committed: safe to publish
-}, smorm.EventPostFlush)
+}, tenet.EventPostFlush)
 
-events.On(func(ctx context.Context, a *smorm.EventArgs) error {
+events.On(func(ctx context.Context, a *tenet.EventArgs) error {
 	mu.Lock()
 	delete(changed, a.EM)
 	mu.Unlock()
 	return nil
-}, smorm.EventOnRollback)
+}, tenet.EventOnRollback)
 ```
 
 An error returned from `postFlush` is returned by `Flush`, but the data is
@@ -111,13 +111,13 @@ committed already.
 
 ## Soft delete
 
-Entities with `smorm.SoftDelete` get a `deleted_at` column and the
-`smorm.SoftDeleteFilterName` filter:
+Entities with `tenet.SoftDelete` get a `deleted_at` column and the
+`tenet.SoftDeleteFilterName` filter:
 
 - `Remove` sets `deleted_at` (an UPDATE, followed by `postRemove`); the
   entity leaves the entity manager.
 - Queries and collections hide deleted rows. `Query.WithDeleted()` shows
-  them for one query, `em.Filters().Disable(smorm.SoftDeleteFilterName)` for the
+  them for one query, `em.Filters().Disable(tenet.SoftDeleteFilterName)` for the
   entity manager.
 - References to a deleted row still load (an audit entry keeps showing the
   deleted record it refers to).

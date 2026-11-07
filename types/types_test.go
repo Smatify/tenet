@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/smatify/smorm/dialect"
-	"github.com/smatify/smorm/uuid"
+	"github.com/smatify/tenet/dialect"
+	"github.com/smatify/tenet/uuid"
 )
 
 var dialects = []dialect.Name{dialect.Postgres, dialect.MySQL, dialect.MariaDB, dialect.SQLite, dialect.MSSQL}

@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/smatify/smorm/dialect"
-	"github.com/smatify/smorm/mapping"
+	"github.com/smatify/tenet/dialect"
+	"github.com/smatify/tenet/mapping"
 )
 
 func TestNextVersion(t *testing.T) {

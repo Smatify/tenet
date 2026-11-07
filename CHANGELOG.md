@@ -10,7 +10,7 @@ The first release. The API may still change before v1.0.0.
   and pessimistic locking, filters and soft delete.
 - Mapping with struct tags in two styles: Doctrine (unexported fields,
   generated getters with lazy loading) and Go (exported fields,
-  `smorm.Ref[T]`); traits for IDs (int, UUIDv7) and timestamps, embeddables,
+  `tenet.Ref[T]`); traits for IDs (int, UUIDv7) and timestamps, embeddables,
   inheritance, generated identity columns.
 - Associations (many-to-one, one-to-many, one-to-one, many-to-many) with
   cascades, orphan removal, lazy, extra lazy and eager loading; lazy loads
@@ -22,8 +22,8 @@ The first release. The API may still change before v1.0.0.
 - Migrations in Go or SQL, generated from the difference between the
   entities and the database, with locking, dry runs and rollback by run.
 - Project console (`migrations:*`, `schema:*`, `fixtures:load`) and maker
-  (`make:entity`, `make:migration`, `make:fixtures`, …), the `smorm` CLI and
+  (`make:entity`, `make:migration`, `make:fixtures`, …), the `tenet` CLI and
   a vet analyzer.
 - Dialects for Postgres, MySQL/MariaDB, SQLite and SQL Server;
-  OpenTelemetry tracing in `extra/smormotel`.
+  OpenTelemetry tracing in `extra/tenetotel`.
 - Go 1.26 or newer.

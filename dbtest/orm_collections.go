@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/smatify/smorm"
-	"github.com/smatify/smorm/dbal"
+	"github.com/smatify/tenet"
+	"github.com/smatify/tenet/dbal"
 )
 
 func init() {
@@ -20,40 +20,40 @@ func init() {
 }
 
 type colAuthor struct {
-	smorm.Entity `smorm:"table:col_author"`
+	tenet.Entity `tenet:"table:col_author"`
 	ID           int64
-	Name         string                    `smorm:"length:50"`
-	Posts        smorm.Collection[colPost] `smorm:"oneToMany,mappedBy:Author,cascade:persist|remove,orphanRemoval,orderBy:Title,fetch:extraLazy"`
-	Tags         smorm.Collection[colTag]  `smorm:"manyToMany,inversedBy:Authors,cascade:persist,joinTable:col_author_tag"`
+	Name         string                    `tenet:"length:50"`
+	Posts        tenet.Collection[colPost] `tenet:"oneToMany,mappedBy:Author,cascade:persist|remove,orphanRemoval,orderBy:Title,fetch:extraLazy"`
+	Tags         tenet.Collection[colTag]  `tenet:"manyToMany,inversedBy:Authors,cascade:persist,joinTable:col_author_tag"`
 }
 
 // colReader links tags without cascading: they are stored on their own.
 type colReader struct {
-	smorm.Entity `smorm:"table:col_reader"`
+	tenet.Entity `tenet:"table:col_reader"`
 	ID           int64
-	Name         string                   `smorm:"length:50"`
-	Tags         smorm.Collection[colTag] `smorm:"manyToMany,joinTable:col_reader_tag"`
+	Name         string                   `tenet:"length:50"`
+	Tags         tenet.Collection[colTag] `tenet:"manyToMany,joinTable:col_reader_tag"`
 }
 
 type colPost struct {
-	smorm.Entity `smorm:"table:col_post"`
+	tenet.Entity `tenet:"table:col_post"`
 	ID           int64
-	Title        string     `smorm:"length:50"`
-	Author       *colAuthor `smorm:"inversedBy:Posts,notnull,onDelete:cascade"`
+	Title        string     `tenet:"length:50"`
+	Author       *colAuthor `tenet:"inversedBy:Posts,notnull,onDelete:cascade"`
 }
 
 type colTag struct {
-	smorm.Entity `smorm:"table:col_tag"`
+	tenet.Entity `tenet:"table:col_tag"`
 	ID           int64
-	Label        string                      `smorm:"length:50"`
-	Authors      smorm.Collection[colAuthor] `smorm:"manyToMany,mappedBy:Tags"`
+	Label        string                      `tenet:"length:50"`
+	Authors      tenet.Collection[colAuthor] `tenet:"manyToMany,mappedBy:Tags"`
 }
 
 type colComment struct {
-	smorm.Entity `smorm:"table:col_comment"`
+	tenet.Entity `tenet:"table:col_comment"`
 	ID           int64
-	Body         string             `smorm:"length:50"`
-	Post         smorm.Ref[colPost] `smorm:"manyToOne"`
+	Body         string             `tenet:"length:50"`
+	Post         tenet.Ref[colPost] `tenet:"manyToOne"`
 }
 
 func titles(posts []*colPost) []string {
@@ -99,7 +99,7 @@ func testORMCollections(t *testing.T, db *dbal.DB) {
 		}
 	}})
 	em2 := newEM()
-	la, err := smorm.Find[colAuthor](ctx, em2, a.ID)
+	la, err := tenet.Find[colAuthor](ctx, em2, a.ID)
 	must(t, err)
 	if la.Posts.IsInitialized() || la.Posts.Len() != 2 || la.Posts.IsInitialized() || postSelects != 0 {
 		t.Fatal("extra lazy Len must count without loading")
@@ -134,7 +134,7 @@ func testORMCollections(t *testing.T, db *dbal.DB) {
 		t.Fatalf("tags = %d (removing from a manyToMany must not delete the tag)", n)
 	}
 	em3 := newEM()
-	la3, err := smorm.Find[colAuthor](ctx, em3, a.ID)
+	la3, err := tenet.Find[colAuthor](ctx, em3, a.ID)
 	must(t, err)
 	if got := labels(la3.Tags.All()); !slices.Equal(got, []string{"orm", "sql"}) {
 		t.Fatalf("tags after change = %v", got)
@@ -150,19 +150,19 @@ func testORMCollections(t *testing.T, db *dbal.DB) {
 	}
 	// Explicit loading and detached collections.
 	em4 := newEM()
-	la4, err := smorm.Find[colAuthor](ctx, em4, a.ID)
+	la4, err := tenet.Find[colAuthor](ctx, em4, a.ID)
 	must(t, err)
-	must(t, smorm.Load(ctx, &la4.Tags))
+	must(t, tenet.Load(ctx, &la4.Tags))
 	if !la4.Tags.IsInitialized() {
 		t.Fatal("Load collection")
 	}
 	em4.Clear()
-	if err := smorm.CatchLazy(func() error { la4.Posts.All(); return nil }); !errors.Is(err, smorm.ErrDetached) {
+	if err := tenet.CatchLazy(func() error { la4.Posts.All(); return nil }); !errors.Is(err, tenet.ErrDetached) {
 		t.Fatalf("detached collection = %v", err)
 	}
 	// Removing the owner cascades to its posts.
 	em5 := newEM()
-	la5, err := smorm.Find[colAuthor](ctx, em5, a.ID)
+	la5, err := tenet.Find[colAuthor](ctx, em5, a.ID)
 	must(t, err)
 	must(t, em5.Remove(la5))
 	must(t, em5.Flush(ctx))
@@ -177,14 +177,14 @@ func testORMRef(t *testing.T, db *dbal.DB) {
 	em := newEM()
 	a := &colAuthor{Name: "a"}
 	p := &colPost{Title: "p", Author: a}
-	c := &colComment{Body: "hi", Post: smorm.NewRef(p)}
+	c := &colComment{Body: "hi", Post: tenet.NewRef(p)}
 	empty := &colComment{Body: "none"}
 	for _, x := range []any{a, p, c, empty} {
 		must(t, em.Persist(x))
 	}
 	must(t, em.Flush(ctx))
 	em2 := newEM()
-	lc, err := smorm.Find[colComment](ctx, em2, c.ID)
+	lc, err := tenet.Find[colComment](ctx, em2, c.ID)
 	must(t, err)
 	if lc.Post.IsNil() || em2.IsInitialized(lc.Post.Ptr()) {
 		t.Fatal("ref must be an uninitialized stub")
@@ -192,20 +192,20 @@ func testORMRef(t *testing.T, db *dbal.DB) {
 	if lc.Post.Get().Title != "p" || !em2.IsInitialized(lc.Post.Ptr()) {
 		t.Fatal("Get must load")
 	}
-	le, err := smorm.Find[colComment](ctx, em2, empty.ID)
+	le, err := tenet.Find[colComment](ctx, em2, empty.ID)
 	must(t, err)
 	if !le.Post.IsNil() || le.Post.Get() != nil {
 		t.Fatal("empty ref")
 	}
-	other, _ := smorm.Find[colPost](ctx, em2, p.ID)
+	other, _ := tenet.Find[colPost](ctx, em2, p.ID)
 	le.Post.Set(other)
 	must(t, em2.Flush(ctx))
-	check, err := smorm.Find[colComment](ctx, newEM(), empty.ID)
+	check, err := tenet.Find[colComment](ctx, newEM(), empty.ID)
 	must(t, err)
 	if check.Post.Get().ID != p.ID {
 		t.Fatal("Ref.Set must write the FK")
 	}
-	must(t, smorm.Load(ctx, &check.Post))
+	must(t, tenet.Load(ctx, &check.Post))
 }
 
 // testJoinTargetOfAnotherManager: a stored record that another entity
@@ -232,7 +232,7 @@ func testJoinTargetOfAnotherManager(t *testing.T, db *dbal.DB) {
 	n := &colReader{Name: "cid"}
 	n.Tags.Add(&colTag{Label: "never stored"})
 	must(t, third.Persist(n))
-	var nf *smorm.NewEntityFoundError
+	var nf *tenet.NewEntityFoundError
 	if err := third.Flush(ctx); !errors.As(err, &nf) {
 		t.Fatalf("a tag never stored: %v", err)
 	}

@@ -7,33 +7,33 @@ import (
 	"testing"
 	"time"
 
-	"github.com/smatify/smorm"
-	"github.com/smatify/smorm/cache"
-	"github.com/smatify/smorm/dbal"
-	"github.com/smatify/smorm/uuid"
+	"github.com/smatify/tenet"
+	"github.com/smatify/tenet/cache"
+	"github.com/smatify/tenet/dbal"
+	"github.com/smatify/tenet/uuid"
 )
 
 func init() { Register(Case{"ORM/SecondLevelCache", testORMCache}) }
 
 type slcCategory struct {
-	smorm.Entity `smorm:"table:slc_category,cache"`
+	tenet.Entity `tenet:"table:slc_category,cache"`
 	ID           int64
-	Name         string `smorm:"length:30"`
+	Name         string `tenet:"length:30"`
 }
 
 type slcProduct struct {
-	smorm.Entity `smorm:"table:slc_product,cache,cacheTTL:1h"`
-	smorm.SoftDelete
+	tenet.Entity `tenet:"table:slc_product,cache,cacheTTL:1h"`
+	tenet.SoftDelete
 	ID       int64
-	Name     string `smorm:"length:30"`
+	Name     string `tenet:"length:30"`
 	Active   bool
 	Price    float64
 	Made     time.Time
-	Meta     map[string]any `smorm:"nullable"`
+	Meta     map[string]any `tenet:"nullable"`
 	Ref      uuid.UUID
-	Note     *string      `smorm:"length:30"`
-	TenantID int64        `smorm:"column:tenant_id"`
-	Category *slcCategory `smorm:"manyToOne"`
+	Note     *string      `tenet:"length:30"`
+	TenantID int64        `tenet:"column:tenant_id"`
+	Category *slcCategory `tenet:"manyToOne"`
 }
 
 func testORMCache(t *testing.T, db *dbal.DB) {
@@ -41,8 +41,8 @@ func testORMCache(t *testing.T, db *dbal.DB) {
 	newEM := setupORM(t, db, slcProduct{})
 	reg := newEM().Registry()
 	c := cache.NewMemory(100)
-	em := func() *smorm.EntityManager {
-		return smorm.NewEntityManager(db, smorm.WithRegistry(reg), smorm.WithSecondLevelCache(c), smorm.WithContext(ctx))
+	em := func() *tenet.EntityManager {
+		return tenet.NewEntityManager(db, tenet.WithRegistry(reg), tenet.WithSecondLevelCache(c), tenet.WithContext(ctx))
 	}
 	made := time.Date(2026, 10, 20, 8, 30, 0, 123000000, time.UTC)
 	cat := &slcCategory{Name: "tools"}
@@ -59,14 +59,14 @@ func testORMCache(t *testing.T, db *dbal.DB) {
 			selects++
 		}
 	}})
-	if _, err := smorm.Find[slcProduct](ctx, em(), p.ID); err != nil {
+	if _, err := tenet.Find[slcProduct](ctx, em(), p.ID); err != nil {
 		t.Fatal(err)
 	}
 	if selects != 1 {
 		t.Fatalf("first find selects = %d", selects)
 	}
 	e2 := em()
-	got, err := smorm.Find[slcProduct](ctx, e2, p.ID)
+	got, err := tenet.Find[slcProduct](ctx, e2, p.ID)
 	must(t, err)
 	if selects != 1 {
 		t.Fatalf("cached find must not query, selects = %d", selects)
@@ -76,38 +76,38 @@ func testORMCache(t *testing.T, db *dbal.DB) {
 	}
 	// The category reference was not cached yet: loading it queries once,
 	// afterwards other entity managers get it from the cache.
-	must(t, smorm.Load(ctx, got.Category))
+	must(t, tenet.Load(ctx, got.Category))
 	if got.Category.Name != "tools" {
 		t.Fatal("lazy category")
 	}
 	before := selects
-	ref, err := smorm.Reference[slcCategory](em(), cat.ID)
+	ref, err := tenet.Reference[slcCategory](em(), cat.ID)
 	must(t, err)
-	must(t, smorm.Load(ctx, ref))
+	must(t, tenet.Load(ctx, ref))
 	if ref.Name != "tools" || selects != before {
 		t.Fatal("category reference must be initialized from the cache")
 	}
 	// Updates refresh the cache after commit.
 	got.Name = "sledgehammer"
 	must(t, e2.Flush(ctx))
-	again, err := smorm.Find[slcProduct](ctx, em(), p.ID)
+	again, err := tenet.Find[slcProduct](ctx, em(), p.ID)
 	must(t, err)
 	if again.Name != "sledgehammer" || selects != before {
 		t.Fatalf("updated cached = %q, selects %d", again.Name, selects)
 	}
 	// Filters other than soft delete bypass the cache.
 	e3 := em()
-	e3.Filters().Enable("tenant", smorm.ColumnFilter("tenant_id", 2))
-	if _, err := smorm.Find[slcProduct](ctx, e3, p.ID); !errors.Is(err, smorm.ErrNotFound) || selects == before {
+	e3.Filters().Enable("tenant", tenet.ColumnFilter("tenant_id", 2))
+	if _, err := tenet.Find[slcProduct](ctx, e3, p.ID); !errors.Is(err, tenet.ErrNotFound) || selects == before {
 		t.Fatalf("tenant filter must bypass the cache: %v", err)
 	}
 	// Removal evicts.
 	e4 := em()
-	rm, err := smorm.Find[slcProduct](ctx, e4, p.ID)
+	rm, err := tenet.Find[slcProduct](ctx, e4, p.ID)
 	must(t, err)
 	must(t, e4.Remove(rm))
 	must(t, e4.Flush(ctx))
-	if _, err := smorm.Find[slcProduct](ctx, em(), p.ID); !errors.Is(err, smorm.ErrNotFound) {
+	if _, err := tenet.Find[slcProduct](ctx, em(), p.ID); !errors.Is(err, tenet.ErrNotFound) {
 		t.Fatalf("soft deleted product served: %v", err)
 	}
 	if c.Stats().Hits == 0 {

@@ -4,8 +4,8 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/smatify/smorm/schema"
-	"github.com/smatify/smorm/types"
+	"github.com/smatify/tenet/schema"
+	"github.com/smatify/tenet/types"
 )
 
 // BuildSchema returns the database schema the entities map to, including

@@ -1,5 +1,5 @@
 // Package vet provides a go/analysis analyzer that finds direct accesses to
-// unexported entity fields that are not preceded by smorm.Touch (such code
+// unexported entity fields that are not preceded by tenet.Touch (such code
 // reads zero values from uninitialized references, lazy loading proxies),
 // and field names in queries that the entity does not have.
 package vet
@@ -15,11 +15,11 @@ import (
 	"golang.org/x/tools/go/analysis/passes/inspect"
 	"golang.org/x/tools/go/ast/inspector"
 
-	"github.com/smatify/smorm/internal/brand"
+	"github.com/smatify/tenet/internal/brand"
 )
 
 const (
-	rootPath   = "github.com/smatify/smorm"
+	rootPath   = "github.com/smatify/tenet"
 	headerPkg  = rootPath + "/internal/entity"
 	headerName = "Header"
 )

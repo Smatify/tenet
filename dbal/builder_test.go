@@ -9,9 +9,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/smatify/smorm/dialect"
-	"github.com/smatify/smorm/internal/fakedb"
-	"github.com/smatify/smorm/internal/testdialect"
+	"github.com/smatify/tenet/dialect"
+	"github.com/smatify/tenet/internal/fakedb"
+	"github.com/smatify/tenet/internal/testdialect"
 )
 
 func expectSQL(t *testing.T, got string, args []any, err error, want string, wantArgs ...any) {

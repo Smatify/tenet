@@ -3,7 +3,7 @@ package migrations
 import (
 	"context"
 
-	"github.com/smatify/smorm/migrations"
+	"github.com/smatify/tenet/migrations"
 )
 
 func init() {

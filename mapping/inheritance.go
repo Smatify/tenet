@@ -6,7 +6,7 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/smatify/smorm/internal/brand"
+	"github.com/smatify/tenet/internal/brand"
 )
 
 func (e *Entity) byColumnHas(col string) bool {

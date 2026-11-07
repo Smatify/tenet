@@ -1,18 +1,18 @@
-module github.com/smatify/smorm/bench
+module github.com/smatify/tenet/bench
 
 go 1.26.0
 
 
 replace (
-	github.com/smatify/smorm => ../
-	github.com/smatify/smorm/dialect/pgdialect => ../dialect/pgdialect
+	github.com/smatify/tenet => ../
+	github.com/smatify/tenet/dialect/pgdialect => ../dialect/pgdialect
 )
 
 require (
 	entgo.io/ent v0.14.6
 	github.com/jackc/pgx/v5 v5.11.0
-	github.com/smatify/smorm v0.0.0
-	github.com/smatify/smorm/dialect/pgdialect v0.0.0-00010101000000-000000000000
+	github.com/smatify/tenet v0.0.0
+	github.com/smatify/tenet/dialect/pgdialect v0.0.0-00010101000000-000000000000
 	github.com/testcontainers/testcontainers-go v0.44.0
 	github.com/testcontainers/testcontainers-go/modules/postgres v0.44.0
 	github.com/uptrace/bun v1.3.0

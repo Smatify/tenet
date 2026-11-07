@@ -3,8 +3,8 @@ package sqlitedialect
 import (
 	"testing"
 
-	"github.com/smatify/smorm/dbal"
-	"github.com/smatify/smorm/internal/fakedb"
+	"github.com/smatify/tenet/dbal"
+	"github.com/smatify/tenet/internal/fakedb"
 )
 
 func TestBuilderSQL(t *testing.T) {

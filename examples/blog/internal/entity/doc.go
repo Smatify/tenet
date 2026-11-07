@@ -2,4 +2,4 @@
 // make:entity creates and updates them; regenerate accessors with go generate.
 package entity
 
-//go:generate go run github.com/smatify/smorm/gen/cmd/generate
+//go:generate go run github.com/smatify/tenet/gen/cmd/generate
