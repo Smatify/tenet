@@ -44,7 +44,7 @@ func BuildSchema(entities []*Entity) *schema.Schema {
 		}
 		t.SetPrimaryKey(pk...)
 		for _, d := range e.Indexes {
-			t.Indexes = append(t.Indexes, &schema.Index{Name: d.Name, Columns: slices.Clone(d.Columns), Unique: d.Unique, Where: d.Where})
+			t.Indexes = append(t.Indexes, &schema.Index{Name: d.Name, Columns: slices.Clone(d.Columns), Unique: d.Unique, Where: d.Where, Sort: slices.Clone(d.Sort)})
 		}
 		for _, a := range e.Assocs {
 			if !a.Owning || !a.Kind.IsToOne() {
@@ -171,7 +171,7 @@ func addSubclass(s *schema.Schema, e *Entity) {
 func addOwnConstraints(t *schema.Table, e *Entity) {
 	for _, d := range e.Indexes {
 		if t.Index(d.Name) == nil {
-			t.Indexes = append(t.Indexes, &schema.Index{Name: d.Name, Columns: slices.Clone(d.Columns), Unique: d.Unique, Where: d.Where})
+			t.Indexes = append(t.Indexes, &schema.Index{Name: d.Name, Columns: slices.Clone(d.Columns), Unique: d.Unique, Where: d.Where, Sort: slices.Clone(d.Sort)})
 		}
 	}
 	for _, a := range e.Assocs {

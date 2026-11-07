@@ -45,6 +45,8 @@ const (
 	FeatureSkipLocked
 	FeatureDeleteJoin
 	FeatureUpdateFrom
+	FeatureArrayParams // a slice as one array parameter: x = ANY(?)
+	FeatureNullsOrder  // ORDER BY x NULLS FIRST / NULLS LAST
 )
 
 // Has reports whether all of the given features are set.

@@ -319,7 +319,8 @@ func (r *Registry) parse(t reflect.Type) (*Entity, error) {
 // separated by semicolons. They cover columns a field tag cannot reach
 // (join columns, embedded timestamps). A group may end in a predicate
 // after "?" that makes the index partial, naming fields in braces:
-// index:subsite?{approvedAt} IS NULL indexes only the rows it matches.
+// index:subsite?{approvedAt} IS NULL indexes only the rows it matches. A
+// field may be followed by its order: index:startsAt desc nulls last|id.
 func (e *Entity) entityIndexes(v string) error {
 	if v == "" {
 		return nil
@@ -334,18 +335,28 @@ func (e *Entity) entityIndexes(v string) error {
 	}
 	for _, group := range strings.Split(v, ";") {
 		group, pred, partial := strings.Cut(group, "?")
-		var cols []string
-		for _, name := range List(group) {
+		var cols, sorts []string
+		sorted := false
+		for _, item := range List(group) {
+			name, order, _ := strings.Cut(item, " ")
 			col := column(name)
 			if col == "" {
 				return fmt.Errorf("index: unknown field %q", name)
 			}
-			cols = append(cols, col)
+			sort, err := schema.ParseSort(order)
+			if err != nil {
+				return fmt.Errorf("index: %w", err)
+			}
+			cols, sorts = append(cols, col), append(sorts, sort)
+			sorted = sorted || sort != ""
 		}
 		if len(cols) == 0 {
 			return fmt.Errorf("index: empty group in %q", v)
 		}
 		d := &IndexDef{Name: schema.IdentifierName("idx", e.Table, cols), Columns: cols}
+		if sorted {
+			d.Sort = sorts
+		}
 		if partial {
 			var err error
 			if d.Where, err = predicateColumns(strings.TrimSpace(pred), column); err != nil {

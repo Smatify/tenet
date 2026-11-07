@@ -2,6 +2,7 @@ package tenet
 
 import (
 	"context"
+	"iter"
 	"reflect"
 
 	"github.com/smatify/tenet/dbal"
@@ -57,8 +58,8 @@ type InsertQuery[T any] struct{ i *orm.Insert }
 // type with Columns.
 type Selection interface{ ormQuery() *orm.Query }
 
-// Insert starts a bulk insert of T (alias "t0"): entities (Rows) or the
-// rows of a query (Select), optionally an upsert, e.g.
+// Insert starts a bulk insert of T (alias "t0"): entities (Rows, RowsFrom)
+// or the rows of a query (Select), optionally an upsert, e.g.
 //
 //	tenet.Insert[Read](em).Rows(r).OnConflict("User", "Thread").Set("ReadAt", tenet.Raw("GREATEST({ReadAt}, {excluded.ReadAt})")).Exec(ctx)
 //
@@ -74,6 +75,28 @@ func (q *InsertQuery[T]) Rows(entities ...*T) *InsertQuery[T] {
 	for _, e := range entities {
 		q.i.Rows(e)
 	}
+	return q
+}
+
+// RowsFrom adds the entities seq yields as rows. Exec takes them while it
+// writes, a statement at a time in one transaction, so millions of rows need
+// not be in memory at once:
+//
+//	tenet.Insert[Change](em).RowsFrom(func(yield func(*Change) bool) {
+//		for _, r := range ratings {
+//			if !yield(r.Change()) {
+//				return
+//			}
+//		}
+//	}).Exec(ctx)
+func (q *InsertQuery[T]) RowsFrom(seq iter.Seq[*T]) *InsertQuery[T] {
+	q.i.RowsFrom(func(yield func(any) bool) {
+		for e := range seq {
+			if !yield(e) {
+				return
+			}
+		}
+	})
 	return q
 }
 

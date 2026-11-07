@@ -102,7 +102,11 @@ type inCond struct {
 	not    bool
 }
 
-// In matches field IN (values...); values is a slice.
+// In matches field IN (values...); values is a slice. Repeated values are
+// bound once. A list that takes more than half the bind parameters of a
+// statement is sent as one array parameter on Postgres (field = ANY(?)) and
+// may have any length; on other databases a list longer than the limit
+// (SQLite 32766, MySQL 65535, SQL Server 2000) fails before it is sent.
 func In(field, values any) Cond { return inCond{field: field, values: values} }
 
 // NotIn matches field NOT IN (values...).
@@ -123,11 +127,7 @@ func (c inCond) build(q *Query) (dbal.Expr, error) {
 			return nil, err
 		}
 	}
-	op := "IN"
-	if c.not {
-		op = "NOT IN"
-	}
-	return dbal.SQL("? "+op+" ?", dbal.Ident(col), dbal.In(args)), nil
+	return dbal.IsIn(dbal.Ident(col), args, c.not), nil
 }
 
 type groupCond struct {

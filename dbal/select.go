@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"slices"
 	"strconv"
+	"strings"
 
 	"github.com/smatify/tenet/dialect"
 )
@@ -225,7 +226,8 @@ func (q *SelectQuery) Having(query string, args ...any) *SelectQuery {
 	return q
 }
 
-// Order is a sort direction.
+// Order is a sort direction, optionally with the place of NULL values:
+// Asc, Desc, Desc.NullsLast(), Asc.NullsFirst().
 type Order string
 
 // Sort directions.
@@ -234,12 +236,67 @@ const (
 	Desc Order = "DESC"
 )
 
+// NullsFirst returns the direction of o with NULL values before all others.
+func (o Order) NullsFirst() Order { return o.Dir() + " NULLS FIRST" }
+
+// NullsLast returns the direction of o with NULL values after all others.
+func (o Order) NullsLast() Order { return o.Dir() + " NULLS LAST" }
+
+// Dir returns Asc or Desc without the place of NULL values.
+func (o Order) Dir() Order {
+	if strings.HasPrefix(strings.ToUpper(string(o)), "DESC") {
+		return Desc
+	}
+	return Asc
+}
+
+// nullsFirst reports whether NULL values go first; ok is false when o
+// leaves it to the database.
+func (o Order) nullsFirst() (first, ok bool) {
+	switch _, n, _ := strings.Cut(strings.ToUpper(string(o)), " NULLS "); n {
+	case "FIRST":
+		return true, true
+	case "LAST":
+		return false, true
+	}
+	return false, false
+}
+
+// OrderTerm renders e sorted by o. Postgres and SQLite place NULL values
+// with NULLS FIRST/LAST; elsewhere a preceding CASE term places them, unless
+// the database sorts them there anyway (NULL is the smallest value on
+// MySQL, MariaDB and SQL Server: first ascending, last descending), so an
+// index on e still serves the order.
+func OrderTerm(e Expr, o Order) Expr { return orderTerm{e, o} }
+
+type orderTerm struct {
+	e Expr
+	o Order
+}
+
+func (t orderTerm) AppendSQL(w *SQLWriter) error {
+	dir := t.o.Dir()
+	first, ok := t.o.nullsFirst()
+	switch {
+	case ok && w.d.Features().Has(dialect.FeatureNullsOrder):
+		nulls := " NULLS LAST"
+		if first {
+			nulls = " NULLS FIRST"
+		}
+		return w.WriteExpr("? "+string(dir)+nulls, t.e)
+	case ok && first != (dir == Asc):
+		rank := "1 ELSE 0" // NULLS LAST
+		if first {
+			rank = "0 ELSE 1"
+		}
+		return w.WriteExpr("CASE WHEN ? IS NULL THEN "+rank+" END, ? "+string(dir), t.e, t.e)
+	}
+	return w.WriteExpr("? "+string(dir), t.e)
+}
+
 // OrderBy adds a quoted column with direction.
 func (q *SelectQuery) OrderBy(column string, dir Order) *SelectQuery {
-	if dir != Desc {
-		dir = Asc
-	}
-	q.orderBy = append(q.orderBy, SQL("? "+string(dir), Ident(column)))
+	q.orderBy = append(q.orderBy, OrderTerm(Ident(column), dir))
 	return q
 }
 

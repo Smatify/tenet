@@ -664,3 +664,38 @@ func TestAssociationIndexes(t *testing.T) {
 		t.Fatalf("err = %v", err)
 	}
 }
+
+type ScheduledMatch struct {
+	entity.Header `tenet:"index:startsAt desc nulls last|ID;Round DESC"`
+	ID            int64
+	Round         int
+	startsAt      *time.Time
+}
+
+func TestEntityIndexOrder(t *testing.T) {
+	e, err := For[ScheduledMatch](NewRegistry())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(e.Indexes) != 2 || !slices.Equal(e.Indexes[0].Sort, []string{"DESC NULLS LAST", ""}) || !slices.Equal(e.Indexes[1].Sort, []string{"DESC"}) {
+		t.Fatalf("indexes = %+v %+v", e.Indexes[0], e.Indexes[1])
+	}
+	table := BuildSchema([]*Entity{e}).Table("scheduled_match")
+	if i := table.Index(e.Indexes[0].Name); i == nil || i.SortOf(0) != "DESC NULLS LAST" {
+		t.Fatalf("schema index = %+v", i)
+	}
+	type plain struct {
+		entity.Header `tenet:"index:ID asc"`
+		ID            int64
+	}
+	if p, err := For[plain](NewRegistry()); err != nil || p.Indexes[0].Sort != nil {
+		t.Fatalf("ascending index: %v %+v", err, p)
+	}
+	type bad struct {
+		entity.Header `tenet:"index:ID sideways"`
+		ID            int64
+	}
+	if _, err := For[bad](NewRegistry()); err == nil || !strings.Contains(err.Error(), `invalid index order "sideways"`) {
+		t.Fatalf("err = %v", err)
+	}
+}

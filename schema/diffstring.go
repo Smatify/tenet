@@ -52,10 +52,10 @@ func (d *Diff) String() string {
 			b.WriteString("\n")
 		}
 		for _, i := range td.AddIndexes {
-			b.WriteString("  add index " + i.Name + " (" + strings.Join(i.Columns, ",") + ") where " + i.Where + "\n")
+			b.WriteString("  add index " + i.Name + " (" + indexColumns(i) + ") where " + i.Where + "\n")
 		}
 		for _, i := range td.DropIndexes {
-			b.WriteString("  drop index " + i.Name + " (" + strings.Join(i.Columns, ",") + ") where " + i.Where + "\n")
+			b.WriteString("  drop index " + i.Name + " (" + indexColumns(i) + ") where " + i.Where + "\n")
 		}
 		for _, f := range td.AddForeignKeys {
 			b.WriteString("  add fk " + f.Name + " " + string(f.OnDelete) + "/" + string(f.OnUpdate) + "\n")
@@ -71,4 +71,12 @@ func (d *Diff) String() string {
 		}
 	}
 	return b.String()
+}
+
+func indexColumns(i *Index) string {
+	out := make([]string, len(i.Columns))
+	for n, c := range i.Columns {
+		out[n] = strings.TrimSpace(c + " " + i.SortOf(n))
+	}
+	return strings.Join(out, ",")
 }

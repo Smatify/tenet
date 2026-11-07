@@ -24,7 +24,9 @@
   one per HTTP request, job or event, not one per process. A long job over
   many rows flushes and calls `Clear` in batches (or uses `Detach` for the
   entities it is done with) to keep memory flat; entities from before the
-  `Clear` are no longer managed and are not written.
+  `Clear` are no longer managed and are not written. A job that adds many
+  rows writes them with `tenet.Insert[T](em).RowsFrom(seq)` instead: no
+  unit of work, and only the rows of one statement in memory at a time.
 - Entities belong to the entity manager that loaded or persisted them. An
   entity of another entity manager reached through a relationship is linked
   when it is stored already, and reported (`NewEntityFoundError`) when it

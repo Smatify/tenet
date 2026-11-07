@@ -74,9 +74,33 @@ func (g *DDL) mysqlAutoKey(t *Table) *Index {
 
 func (g *DDL) indexDefinition(i *Index) string {
 	if i.Unique {
-		return "UNIQUE INDEX " + g.q(i.Name) + " (" + g.qList(i.Columns) + ")"
+		return "UNIQUE INDEX " + g.q(i.Name) + " (" + g.indexColumns(i) + ")"
 	}
-	return "INDEX " + g.q(i.Name) + " (" + g.qList(i.Columns) + ")"
+	return "INDEX " + g.q(i.Name) + " (" + g.indexColumns(i) + ")"
+}
+
+// indexColumns lists the columns of i with their order: only the direction
+// except on Postgres, which also stores the place of NULL values.
+func (g *DDL) indexColumns(i *Index) string {
+	out := make([]string, len(i.Columns))
+	for n, c := range i.Columns {
+		out[n] = g.q(c)
+		if sort := g.indexSort(i.SortOf(n)); sort != "" {
+			out[n] += " " + sort
+		}
+	}
+	return strings.Join(out, ", ")
+}
+
+// indexSort is the order of an index column as the database keeps it.
+func (g *DDL) indexSort(sort string) string {
+	if g.name() == dialect.Postgres {
+		return sort
+	}
+	if strings.HasPrefix(sort, "DESC") {
+		return "DESC"
+	}
+	return ""
 }
 
 // DefaultConstraintName returns the SQL Server default constraint name.
@@ -219,7 +243,7 @@ func (g *DDL) CreateIndex(table string, i *Index) string {
 	if i.Unique {
 		s += "UNIQUE "
 	}
-	s += "INDEX " + g.q(i.Name) + " ON " + g.q(table) + " (" + g.qList(i.Columns) + ")"
+	s += "INDEX " + g.q(i.Name) + " ON " + g.q(table) + " (" + g.indexColumns(i) + ")"
 	if i.Where != "" && !g.isMySQL() {
 		s += " WHERE " + i.Where
 	}

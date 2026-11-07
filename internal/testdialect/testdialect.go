@@ -51,6 +51,12 @@ func Like(n dialect.Name) *Named {
 	default:
 		d.F &^= dialect.FeatureOutput
 	}
+	if n != dialect.Postgres {
+		d.F &^= dialect.FeatureArrayParams
+	}
+	if n != dialect.Postgres && n != dialect.SQLite {
+		d.F &^= dialect.FeatureNullsOrder
+	}
 	return d
 }
 

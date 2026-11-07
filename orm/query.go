@@ -481,11 +481,7 @@ func (q *Query) buildMode(count, refs bool) (*dbal.SelectQuery, error) {
 			if err != nil {
 				return nil, err
 			}
-			dir := o.dir
-			if dir != dbal.Desc {
-				dir = dbal.Asc
-			}
-			out.OrderExpr("? "+string(dir), expr)
+			out.OrderExpr("?", dbal.OrderTerm(expr, o.dir))
 			continue
 		}
 		col, _, err := q.resolve(o.field)
@@ -536,11 +532,7 @@ func (q *Query) projection(out *dbal.SelectQuery) (*dbal.SelectQuery, error) {
 		if err != nil {
 			return nil, err
 		}
-		dir := o.dir
-		if dir != dbal.Desc {
-			dir = dbal.Asc
-		}
-		out.OrderExpr("? "+string(dir), e)
+		out.OrderExpr("?", dbal.OrderTerm(e, o.dir))
 	}
 	return out.Limit(q.limit).Offset(q.offset), nil
 }

@@ -2,6 +2,7 @@ package dbtest
 
 import (
 	"context"
+	"fmt"
 	"slices"
 	"testing"
 
@@ -154,13 +155,50 @@ func testORMBulkInsert(t *testing.T, db *dbal.DB) {
 		t.Fatalf("do nothing wrote %d rows: %v", n, got)
 	}
 
+	// Many rows from a stream: statements within the bind limit, one
+	// transaction, an event per statement with its IDs.
+	ids := 0
+	em.Events().On(func(_ context.Context, a *tenet.EventArgs) error { ids += len(a.IDs); return nil }, tenet.EventPostBulk)
+	events = 0
+	yielded := 0
+	stream := func(count int, dup string) func(yield func(*ormAuthor) bool) {
+		return func(yield func(*ormAuthor) bool) {
+			for i := range count {
+				yielded++
+				name := fmt.Sprint("s", i)
+				if i == count/2 && dup != "" {
+					name = dup
+				}
+				if !yield(&ormAuthor{name: name, score: i}) {
+					return
+				}
+			}
+		}
+	}
+	n, err = tenet.Insert[ormAuthor](em).Rows(&ormAuthor{name: "first"}).RowsFrom(stream(1200, "")).Exec(ctx)
+	must(t, err)
+	if n != 1201 || ids != 1201 || events < 3 {
+		t.Fatalf("stream: %d rows, %d IDs in %d events", n, ids, events)
+	}
+	// A failing statement rolls back the earlier ones and stops the stream:
+	// it is read while the rows are written, not up front.
+	before := len(scores())
+	yielded = 0
+	n, err = tenet.Insert[ormAuthor](em).RowsFrom(stream(3000, "ann")).Exec(ctx)
+	if err == nil || n != 0 || len(scores()) != before || yielded >= 3000 {
+		t.Fatalf("failed stream: %d rows, %v, %d of %d authors, %d yielded", n, err, len(scores()), before, yielded)
+	}
+	if n, err = tenet.Insert[ormAuthor](em).RowsFrom(stream(0, "")).Exec(ctx); err != nil || n != 0 {
+		t.Fatalf("empty stream: %d, %v", n, err)
+	}
+
 	// INSERT … SELECT: a category per author, not twice (NOT EXISTS of the
 	// sub query refers to the outer query by its alias).
 	missing := func() *tenet.Query[ormAuthor] {
 		has := tenet.NewQuery[ormCategory](em).Column("1").Where(tenet.Raw("{Name} = a.name"))
 		return tenet.NewQuery[ormAuthor](em).As("a").Columns("{a.name}").Where(tenet.Raw("NOT EXISTS ?", has.Sub()))
 	}
-	for run, want := range []int{3, 0} {
+	for run, want := range []int{before, 0} {
 		n, err = tenet.Insert[ormCategory](em).Select(missing(), "Name").Exec(ctx)
 		must(t, err)
 		if n != want {

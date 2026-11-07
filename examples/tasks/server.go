@@ -60,7 +60,8 @@ type pageJSON struct {
 	Total int        `json:"total"`
 }
 
-// list returns a page of open tasks first, then by title.
+// list returns a page of tasks: open ones first, then by due date (tasks
+// without one last) and title.
 func (s *server) list(w http.ResponseWriter, r *http.Request) {
 	em, _, ok := s.em(w, r)
 	if !ok {
@@ -69,6 +70,7 @@ func (s *server) list(w http.ResponseWriter, r *http.Request) {
 	n, _ := strconv.Atoi(r.URL.Query().Get("page"))
 	q := tenet.NewQuery[Task](em).
 		OrderBy("Done", tenet.Asc).
+		OrderBy("Due", tenet.Asc.NullsLast()).
 		OrderBy("Title", tenet.Asc).
 		With("Assignee") // joined into the query: no query per task
 	page, err := tenet.Paginate(r.Context(), q, n, 20)

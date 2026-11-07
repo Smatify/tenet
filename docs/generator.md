@@ -40,7 +40,10 @@ tenet. DO NOT EDIT.`) with
 - accessors for every mapped field, so loading and writing entities needs no
   reflection, and
 - field references (`entity.PostFields.Title`) for queries: a renamed field
-  breaks the build instead of a query at run time.
+  breaks the build instead of a query at run time. Use them wherever a query
+  takes a field (`Where`, `OrderBy`, `Join`, `With`, `Criteria` keys via
+  `.Name`); strings remain for `Raw` templates and paths across several
+  associations.
 
 The maker regenerates it after each change. After editing entities by
 hand, run `make:generate` or

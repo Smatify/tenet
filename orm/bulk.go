@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"iter"
 	"reflect"
 
 	"github.com/smatify/tenet/dbal"
@@ -173,16 +174,19 @@ func (em *EntityManager) bulk(ctx context.Context, args *EventArgs) error {
 	return em.events.dispatch(ctx, EventPostBulk, args)
 }
 
-// Insert adds many rows of an entity type in one statement: entities
-// (Rows) or the rows of a query (Select), optionally as an upsert
-// (OnConflict). Like Update it bypasses the unit of work: the entities
-// are not managed afterwards and lifecycle hooks do not run; identifiers
-// and timestamps are assigned as on a flush. Listeners get EventPostBulk
-// with the IDs of the rows written. Postgres and SQLite only. Build it with
+// Insert adds many rows of an entity type: entities (Rows, RowsFrom) or
+// the rows of a query (Select, one statement), optionally as an upsert
+// (OnConflict). Entities are written in statements within the bind
+// parameter limit of the database, several of them in one transaction.
+// Like Update it bypasses the unit of work: the entities are not managed
+// afterwards and lifecycle hooks do not run; identifiers and timestamps
+// are assigned as on a flush. Listeners get EventPostBulk with the IDs of
+// the rows written. Postgres and SQLite only. Build it with
 // EntityManager.NewInsert.
 type Insert struct {
 	q         *Query
 	rows      []any
+	seq       iter.Seq[any]
 	sel       *Query
 	selFields []string
 	target    []string
@@ -209,6 +213,12 @@ func (em *EntityManager) NewInsert(t reflect.Type) *Insert {
 // Rows adds entities (pointers) as rows.
 func (i *Insert) Rows(entities ...any) *Insert { i.rows = append(i.rows, entities...); return i }
 
+// RowsFrom adds the entities seq yields as rows, after those of Rows. Exec
+// takes them while it writes, one statement at a time, so millions of rows
+// need not be in memory at once. seq runs inside the transaction of Exec:
+// it must not wait for another connection when the pool has only one.
+func (i *Insert) RowsFrom(seq iter.Seq[any]) *Insert { i.seq = seq; return i }
+
 // Select inserts the rows of a projection (Query.Columns) into fields, in
 // order (INSERT … SELECT).
 func (i *Insert) Select(q *Query, fields ...string) *Insert {
@@ -230,19 +240,29 @@ func (i *Insert) Set(field string, value any) *Insert {
 	return i
 }
 
-func (i *Insert) build() (*dbal.InsertQuery, error) {
+// check reports whether the insert can be built at all.
+func (i *Insert) check() error {
+	if i.q.err != nil {
+		return i.q.err
+	}
+	if d := i.q.em.db.Dialect().Name(); d != dialect.Postgres && d != dialect.SQLite {
+		return fmt.Errorf("insert: not supported by %s", d)
+	}
+	if (len(i.rows) > 0 || i.seq != nil) && i.sel != nil {
+		return errors.New("insert: rows and a select at once")
+	}
+	return nil
+}
+
+// build renders the insert of rows (or of the select) on db.
+func (i *Insert) build(db dbal.IDB, rows []any) (*dbal.InsertQuery, error) {
+	if err := i.check(); err != nil {
+		return nil, err
+	}
 	q := i.q
-	if q.err != nil {
-		return nil, q.err
-	}
 	em, meta := q.em, q.meta
-	if d := em.db.Dialect().Name(); d != dialect.Postgres && d != dialect.SQLite {
-		return nil, fmt.Errorf("insert: not supported by %s", d)
-	}
-	out := em.db.NewInsert().TableAs(meta.Table, q.root)
+	out := db.NewInsert().TableAs(meta.Table, q.root)
 	switch {
-	case len(i.rows) > 0 && i.sel != nil:
-		return nil, errors.New("insert: rows and a select at once")
 	case i.sel != nil:
 		cols := make([]string, len(i.selFields))
 		for n, name := range i.selFields {
@@ -257,8 +277,8 @@ func (i *Insert) build() (*dbal.InsertQuery, error) {
 			return nil, err
 		}
 		out.Columns(cols...).Select(sel)
-	case len(i.rows) > 0:
-		if err := i.values(out); err != nil {
+	case len(rows) > 0:
+		if err := i.values(out, rows); err != nil {
 			return nil, err
 		}
 	default:
@@ -299,9 +319,9 @@ func (i *Insert) build() (*dbal.InsertQuery, error) {
 	return out, nil
 }
 
-// values adds the rows of the entities to out.
-func (i *Insert) values(out *dbal.InsertQuery) error {
-	em, meta := i.q.em, i.q.meta
+// insertColumns returns the fields an insert of meta writes and their
+// columns (with the discriminator).
+func insertColumns(meta *mapping.Entity) ([]*mapping.Field, []string) {
 	var fields []*mapping.Field
 	var cols []string
 	for _, f := range meta.Fields {
@@ -314,9 +334,24 @@ func (i *Insert) values(out *dbal.InsertQuery) error {
 	if meta.Inheritance != "" {
 		cols = append(cols, meta.DiscriminatorColumn)
 	}
+	return fields, cols
+}
+
+// batchRows is the number of rows per statement: within the bind
+// parameter limit, leaving room for the arguments of conflict updates.
+func (i *Insert) batchRows() int {
+	_, cols := insertColumns(i.q.meta)
+	limit := dialect.MaxBindParams(i.q.em.db.Dialect()) - 10*len(i.sets)
+	return max(1, min(maxBatchRows, limit/max(len(cols), 1)))
+}
+
+// values adds the rows of the entities to out.
+func (i *Insert) values(out *dbal.InsertQuery, rows []any) error {
+	em, meta := i.q.em, i.q.meta
+	fields, cols := insertColumns(meta)
 	out.Columns(cols...)
 	now := em.now()
-	for _, ptr := range i.rows {
+	for _, ptr := range rows {
 		if reflect.TypeOf(ptr) != reflect.PointerTo(meta.GoType) {
 			return fmt.Errorf("insert: %s expects *%s, got %T", meta.Name, meta.Name, ptr)
 		}
@@ -355,9 +390,11 @@ func (i *Insert) value(f *mapping.Field, value any) (any, error) {
 	}
 }
 
-// SQL renders the insert for debugging.
+// SQL renders the insert for debugging (the first statement of the rows
+// given to Rows).
 func (i *Insert) SQL() (string, []any, error) {
-	s, err := i.build()
+	rows := i.rows[:min(len(i.rows), i.batchRows())]
+	s, err := i.build(i.q.em.db, rows)
 	if err != nil {
 		return "", nil, err
 	}
@@ -371,11 +408,71 @@ func (i *Insert) Exec(ctx context.Context) (int, error) {
 	if em.closed {
 		return 0, ErrClosed
 	}
-	s, err := i.build()
+	if err := i.check(); err != nil {
+		return 0, err
+	}
+	meta := i.q.meta
+	size := i.batchRows()
+	if i.sel != nil || i.seq == nil && len(i.rows) <= size {
+		s, err := i.build(em.db, i.rows)
+		if err != nil {
+			return 0, err
+		}
+		return em.runBulk(ctx, meta, s, meta.SingleID())
+	}
+	n := 0
+	var events []*EventArgs
+	err := em.db.RunInTx(ctx, nil, func(ctx context.Context, tx *dbal.Tx) error {
+		batch := make([]any, 0, size)
+		write := func() error {
+			s, err := i.build(tx, batch)
+			if err != nil {
+				return err
+			}
+			c, args, err := em.writeBulk(ctx, meta, s, meta.SingleID())
+			if err != nil {
+				return err
+			}
+			n += c
+			if args != nil && em.events.Has(EventPostBulk) {
+				events = append(events, args)
+			}
+			batch = batch[:0]
+			return nil
+		}
+		add := func(ptr any) error {
+			batch = append(batch, ptr)
+			if len(batch) < size {
+				return nil
+			}
+			return write()
+		}
+		for _, ptr := range i.rows {
+			if err := add(ptr); err != nil {
+				return err
+			}
+		}
+		if i.seq != nil {
+			for ptr := range i.seq {
+				if err := add(ptr); err != nil {
+					return err
+				}
+			}
+		}
+		if len(batch) > 0 {
+			return write()
+		}
+		return nil
+	})
 	if err != nil {
 		return 0, err
 	}
-	return em.runBulk(ctx, i.q.meta, s, i.q.meta.SingleID())
+	for _, args := range events {
+		if err := em.bulk(ctx, args); err != nil {
+			return n, err
+		}
+	}
+	return n, nil
 }
 
 // bulkStatement is a bulk write as dbal renders it.
@@ -387,26 +484,36 @@ type bulkStatement interface {
 // runBulk runs s, returning the identifiers id when not nil, and raises
 // EventPostBulk when rows changed.
 func (em *EntityManager) runBulk(ctx context.Context, meta *mapping.Entity, s bulkStatement, id *mapping.Field) (int, error) {
+	n, args, err := em.writeBulk(ctx, meta, s, id)
+	if err != nil || args == nil {
+		return n, err
+	}
+	return n, em.bulk(ctx, args)
+}
+
+// writeBulk runs s and returns the number of rows and the arguments of
+// EventPostBulk (nil when no row changed).
+func (em *EntityManager) writeBulk(ctx context.Context, meta *mapping.Entity, s bulkStatement, id *mapping.Field) (int, *EventArgs, error) {
 	if id == nil {
 		res, err := s.Exec(ctx)
 		if err != nil {
-			return 0, err
+			return 0, nil, err
 		}
 		n, err := res.RowsAffected()
 		if err != nil || n == 0 {
-			return 0, err
+			return 0, nil, err
 		}
-		return int(n), em.bulk(ctx, &EventArgs{EM: em, Meta: meta})
+		return int(n), &EventArgs{EM: em, Meta: meta}, nil
 	}
 	rows, err := s.Rows(ctx)
 	if err != nil {
-		return 0, err
+		return 0, nil, err
 	}
 	ids, err := scanIDs(rows, id, em.db.Dialect().Name())
 	if err != nil || len(ids) == 0 {
-		return 0, err
+		return 0, nil, err
 	}
-	return len(ids), em.bulk(ctx, &EventArgs{EM: em, Meta: meta, IDs: ids})
+	return len(ids), &EventArgs{EM: em, Meta: meta, IDs: ids}, nil
 }
 
 // Delete removes many rows of an entity type in one statement, using field

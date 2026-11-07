@@ -50,13 +50,16 @@ func TestTasks(t *testing.T) {
 		t.Fatalf("created %+v", docs)
 	}
 	call(t, h, "acme", "POST", "/tasks", `{"title":"Answer mail"}`, &write)
+	var plan taskJSON
+	call(t, h, "acme", "POST", "/tasks", `{"title":"Plan","due":"2026-12-01T09:00:00Z"}`, &plan)
 	if code := call(t, h, "acme", "PATCH", "/tasks/"+write.ID, `{"done":true}`, nil); code != 200 {
 		t.Fatalf("update: %d", code)
 	}
 
 	var page pageJSON
 	call(t, h, "acme", "GET", "/tasks", "", &page)
-	if page.Total != 2 || page.Items[0].Title != "Write docs" || page.Items[0].Assignee != "Ann" || !page.Items[1].Done {
+	// Open tasks first, the one due first, the done one last.
+	if page.Total != 3 || page.Items[0].Title != "Plan" || page.Items[1].Assignee != "Ann" || !page.Items[2].Done {
 		t.Fatalf("list %+v", page)
 	}
 
@@ -77,7 +80,7 @@ func TestTasks(t *testing.T) {
 		t.Fatalf("delete: %d", code)
 	}
 	call(t, h, "acme", "GET", "/tasks", "", &page)
-	if page.Total != 1 || page.Items[0].ID != docs.ID {
+	if page.Total != 2 || page.Items[1].ID != docs.ID {
 		t.Fatalf("after delete %+v", page)
 	}
 	if code := call(t, h, "acme", "DELETE", "/tasks/"+write.ID, "", nil); code != 404 {

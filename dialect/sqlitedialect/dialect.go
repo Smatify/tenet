@@ -15,7 +15,7 @@ func New() *Dialect {
 	return &Dialect{features: dialect.FeatureReturning | dialect.FeatureInsertReturning |
 		dialect.FeatureCTE | dialect.FeatureSavepoint | dialect.FeatureReleaseSavepoint |
 		dialect.FeatureTransactionalDDL | dialect.FeatureUpsertOnConflict | dialect.FeatureLimitOffset |
-		dialect.FeatureLastInsertID | dialect.FeatureUpdateFrom}
+		dialect.FeatureLastInsertID | dialect.FeatureUpdateFrom | dialect.FeatureNullsOrder}
 }
 
 // Name implements dialect.Dialect.

@@ -33,6 +33,54 @@ func expectSQL(t *testing.T, got string, args []any, err error, want string, wan
 	}
 }
 
+func TestIsIn(t *testing.T) {
+	d := testdialect.New()
+	d.Dollar = true
+	s, args, err := Build(d, IsIn(Ident("t.id"), []int{1, 2, 1}, false))
+	expectSQL(t, s, args, err, `"t"."id" IN ($1, $2)`, 1, 2)
+	s, args, err = Build(d, IsIn(Ident("id"), []string{}, true))
+	expectSQL(t, s, args, err, `"id" NOT IN (NULL)`)
+
+	// More than half the bind limit: one array parameter, of distinct values.
+	long := make([]int, dialect.DefaultMaxBindParams*2)
+	want := make([]any, dialect.DefaultMaxBindParams)
+	for i := range long {
+		long[i] = i % dialect.DefaultMaxBindParams
+	}
+	for i := range want {
+		want[i] = i
+	}
+	s, args, err = Build(d, IsIn(Ident("id"), long, false))
+	expectSQL(t, s, args, err, `"id" = ANY($1)`, want)
+	exprs := make([]any, len(long))
+	for i := range exprs {
+		exprs[i] = SQL("?", i)
+	}
+	s, args, err = Build(d, IsIn(Ident("id"), exprs, false))
+	if err != nil || s != `"id" = ANY($1)` || len(args[0].([]any)) != len(exprs) || args[0].([]any)[3] != 3 {
+		t.Fatalf("IsIn of expressions: %s %v", s, err)
+	}
+	exprs[0] = Safe("NOW()")
+	if _, _, err := Build(d, IsIn(Ident("id"), exprs, false)); err == nil {
+		t.Fatal("an expression without one argument cannot be an array element")
+	}
+	s, _, err = Build(d, IsIn(Ident("id"), long, true))
+	expectSQL(t, s, nil, err, `"id" <> ALL($1)`)
+
+	// Without array parameters the list fails before anything is sent.
+	d.F &^= dialect.FeatureArrayParams
+	if _, _, err := Build(d, IsIn(Ident("id"), append(long, -1), false)); err == nil {
+		t.Fatal("IsIn over the bind limit without array parameters must fail")
+	}
+	s, args, err = Build(d, IsIn(Ident("id"), long[:dialect.DefaultMaxBindParams], false))
+	if err != nil || len(args) != dialect.DefaultMaxBindParams || !strings.HasPrefix(s, `"id" IN ($1, $2`) {
+		t.Fatalf("IsIn at the limit: %v %d", err, len(args))
+	}
+	if _, _, err := Build(d, IsIn(Ident("id"), 5, false)); err == nil {
+		t.Fatal("IsIn(non-slice) should fail")
+	}
+}
+
 func TestWriteExpr(t *testing.T) {
 	d := testdialect.New()
 	d.Dollar = true
@@ -62,6 +110,13 @@ func TestWriteExpr(t *testing.T) {
 	}
 	if _, _, err := Build(d, SQL("x IN ?", In([]any{SQL("?")}))); err == nil {
 		t.Fatal("error inside In must propagate")
+	}
+	long := make([]int, dialect.DefaultMaxBindParams+1)
+	for i := range long {
+		long[i] = i
+	}
+	if _, _, err := Build(d, SQL("x IN ?", In(long))); err == nil || !strings.Contains(err.Error(), "exceeds the 2000 bind parameters") {
+		t.Fatalf("In over the bind limit: %v", err)
 	}
 	w := NewSQLWriter(d)
 	_ = w.WriteByte('x')
@@ -445,4 +500,38 @@ func TestWriteIdentPerDialect(t *testing.T) {
 			}
 		}
 	}
+}
+
+func TestOrderTerm(t *testing.T) {
+	if Desc.NullsLast() != "DESC NULLS LAST" || Asc.NullsFirst().Dir() != Asc || Desc.NullsFirst().NullsLast() != "DESC NULLS LAST" {
+		t.Fatal("Order helpers")
+	}
+	pg, my := testdialect.Like(dialect.Postgres), testdialect.Like(dialect.MySQL)
+	for _, c := range []struct {
+		d    dialect.Dialect
+		o    Order
+		want string
+	}{
+		{pg, Asc, `"x" ASC`},
+		{pg, "", `"x" ASC`},
+		{pg, "sideways", `"x" ASC`},
+		{pg, Desc, `"x" DESC`},
+		{pg, Desc.NullsLast(), `"x" DESC NULLS LAST`},
+		{pg, Asc.NullsFirst(), `"x" ASC NULLS FIRST`},
+		{pg, "desc nulls first", `"x" DESC NULLS FIRST`},
+		// NULL is the smallest value: placed by the direction alone ...
+		{my, Asc.NullsFirst(), "`x` ASC"},
+		{my, Desc.NullsLast(), "`x` DESC"},
+		// ... or by a CASE term before it.
+		{my, Asc.NullsLast(), "CASE WHEN `x` IS NULL THEN 1 ELSE 0 END, `x` ASC"},
+		{my, Desc.NullsFirst(), "CASE WHEN `x` IS NULL THEN 0 ELSE 1 END, `x` DESC"},
+	} {
+		s, _, err := Build(c.d, OrderTerm(Ident("x"), c.o))
+		if err != nil || s != c.want {
+			t.Errorf("%s %q: got %s (%v), want %s", c.d.Name(), c.o, s, err, c.want)
+		}
+	}
+	q := NewSelect(nil).Column("x").Table("t").OrderBy("x", Desc.NullsLast())
+	s, _, err := Build(my, q)
+	expectSQL(t, s, nil, err, "(SELECT `x` FROM `t` ORDER BY `x` DESC)")
 }

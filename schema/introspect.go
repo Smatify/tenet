@@ -72,7 +72,7 @@ func (b *builder) table(name string) *Table {
 	return t
 }
 
-func (b *builder) index(t *Table, name string, unique, primary bool, col, where string) {
+func (b *builder) index(t *Table, name string, unique, primary bool, col, where, sort string) {
 	if primary {
 		if t.PrimaryKey == nil {
 			t.PrimaryKey = &Index{Name: name, Unique: true, Primary: true}
@@ -84,6 +84,12 @@ func (b *builder) index(t *Table, name string, unique, primary bool, col, where 
 	if i == nil {
 		i = &Index{Name: name, Unique: unique, Where: where}
 		t.Indexes = append(t.Indexes, i)
+	}
+	if sort != "" {
+		for len(i.Sort) < len(i.Columns) {
+			i.Sort = append(i.Sort, "")
+		}
+		i.Sort = append(i.Sort, sort)
 	}
 	i.Columns = append(i.Columns, col)
 }
@@ -156,6 +162,10 @@ func strPtr(n sql.NullString) *string {
 // ---------------------------------------------------------------- Postgres
 
 type pgIntrospector struct{}
+
+// pgIndexSort maps the bits of pg_index.indoption (1 descending, 2 NULLS
+// FIRST) to the order of an index column.
+var pgIndexSort = [4]string{"", "DESC NULLS LAST", "NULLS FIRST", "DESC"}
 
 func (pgIntrospector) introspect(ctx context.Context, q Queryer, b *builder) error {
 	err := scanAll(ctx, q, `SELECT c.relname, COALESCE(obj_description(c.oid, 'pg_class'), '')
@@ -234,7 +244,7 @@ func (pgIntrospector) introspect(ctx context.Context, q Queryer, b *builder) err
 		return err
 	}
 	err = scanAll(ctx, q, `SELECT t.relname, i.relname, ix.indisunique, ix.indisprimary, a.attname,
-			COALESCE(pg_get_expr(ix.indpred, ix.indrelid), '')
+			COALESCE(pg_get_expr(ix.indpred, ix.indrelid), ''), ix.indoption[k.n - 1]
 		FROM pg_index ix
 		JOIN pg_class t ON t.oid = ix.indrelid
 		JOIN pg_class i ON i.oid = ix.indexrelid
@@ -245,10 +255,11 @@ func (pgIntrospector) introspect(ctx context.Context, q Queryer, b *builder) err
 		ORDER BY t.relname, i.relname, k.n`, nil, func(r *sql.Rows) error {
 		var table, name, col, where string
 		var unique, primary bool
-		if err := r.Scan(&table, &name, &unique, &primary, &col, &where); err != nil {
+		var option int
+		if err := r.Scan(&table, &name, &unique, &primary, &col, &where, &option); err != nil {
 			return err
 		}
-		b.index(b.table(table), name, unique, primary, col, where)
+		b.index(b.table(table), name, unique, primary, col, where, pgIndexSort[option&3])
 		return nil
 	})
 	if err != nil {
@@ -431,22 +442,26 @@ func (m mysqlIntrospector) introspect(ctx context.Context, q Queryer, b *builder
 	if err != nil {
 		return err
 	}
-	err = scanAll(ctx, q, `SELECT TABLE_NAME, INDEX_NAME, NON_UNIQUE, COLUMN_NAME FROM information_schema.STATISTICS
+	err = scanAll(ctx, q, `SELECT TABLE_NAME, INDEX_NAME, NON_UNIQUE, COLUMN_NAME, COALESCE(COLLATION, 'A') FROM information_schema.STATISTICS
 		WHERE TABLE_SCHEMA = DATABASE() ORDER BY TABLE_NAME, INDEX_NAME, SEQ_IN_INDEX`, nil, func(r *sql.Rows) error {
-		var table, name, col string
+		var table, name, col, collation string
 		var nonUnique int
-		if err := r.Scan(&table, &name, &nonUnique, &col); err != nil {
+		if err := r.Scan(&table, &name, &nonUnique, &col, &collation); err != nil {
 			return err
+		}
+		sort := ""
+		if collation == "D" {
+			sort = "DESC"
 		}
 		t := b.table(table)
 		if t.ForeignKey(name) != nil {
 			return nil // implicit index InnoDB creates for a foreign key
 		}
 		if name == "PRIMARY" {
-			b.index(t, IdentifierName("pk", table, nil), true, true, col, "")
+			b.index(t, IdentifierName("pk", table, nil), true, true, col, "", "")
 			return nil
 		}
-		b.index(t, name, nonUnique == 0, false, col, "")
+		b.index(t, name, nonUnique == 0, false, col, "", sort)
 		return nil
 	})
 	if err != nil || !m.maria {
@@ -585,12 +600,17 @@ func (sqliteIntrospector) introspect(ctx context.Context, q Queryer, b *builder)
 					return err
 				}
 			}
-			err := scanAll(ctx, q, `SELECT name FROM pragma_index_info(?) ORDER BY seqno`, []any{i.name}, func(r *sql.Rows) error {
+			err := scanAll(ctx, q, `SELECT name, "desc" FROM pragma_index_xinfo(?) WHERE key = 1 ORDER BY seqno`, []any{i.name}, func(r *sql.Rows) error {
 				var col string
-				if err := r.Scan(&col); err != nil {
+				var desc bool
+				if err := r.Scan(&col, &desc); err != nil {
 					return err
 				}
-				b.index(t, i.name, i.unique, false, col, where)
+				sort := ""
+				if desc {
+					sort = "DESC"
+				}
+				b.index(t, i.name, i.unique, false, col, where, sort)
 				return nil
 			})
 			if err != nil {
@@ -753,7 +773,7 @@ func (mssqlIntrospector) introspect(ctx context.Context, q Queryer, b *builder) 
 	if err != nil {
 		return err
 	}
-	err = scanAll(ctx, q, `SELECT t.name, i.name, i.is_unique, i.is_primary_key, c.name, COALESCE(i.filter_definition, '')
+	err = scanAll(ctx, q, `SELECT t.name, i.name, i.is_unique, i.is_primary_key, c.name, COALESCE(i.filter_definition, ''), ic.is_descending_key
 		FROM sys.indexes i
 		JOIN sys.tables t ON t.object_id = i.object_id
 		JOIN sys.index_columns ic ON ic.object_id = i.object_id AND ic.index_id = i.index_id
@@ -761,11 +781,15 @@ func (mssqlIntrospector) introspect(ctx context.Context, q Queryer, b *builder) 
 		WHERE t.schema_id = SCHEMA_ID() AND i.type > 0 AND ic.is_included_column = 0
 		ORDER BY t.name, i.name, ic.key_ordinal`, nil, func(r *sql.Rows) error {
 		var table, name, col, where string
-		var unique, primary bool
-		if err := r.Scan(&table, &name, &unique, &primary, &col, &where); err != nil {
+		var unique, primary, desc bool
+		if err := r.Scan(&table, &name, &unique, &primary, &col, &where, &desc); err != nil {
 			return err
 		}
-		b.index(b.table(table), name, unique, primary, col, where)
+		sort := ""
+		if desc {
+			sort = "DESC"
+		}
+		b.index(b.table(table), name, unique, primary, col, where, sort)
 		return nil
 	})
 	if err != nil {

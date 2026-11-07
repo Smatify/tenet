@@ -1,6 +1,7 @@
 package dbal
 
 import (
+	"database/sql/driver"
 	"errors"
 	"fmt"
 	"reflect"
@@ -173,21 +174,48 @@ type InExpr struct{ values any }
 // In expands a slice into (?, ?, ...). An empty slice renders (NULL) so that
 // "x IN ?" matches nothing instead of producing invalid SQL. Values that
 // repeat are bound once: lists collected from many rows (the game of every
-// match) stay within the bind parameter limit of the database.
+// match) stay within the bind parameter limit of the database. A list
+// longer than that limit fails before anything is sent; IsIn sends it as
+// one array parameter where the database takes one.
 func In(slice any) InExpr { return InExpr{values: slice} }
 
 // AppendSQL implements Expr.
 func (e InExpr) AppendSQL(w *SQLWriter) error {
-	rv := reflect.ValueOf(e.values)
-	if rv.Kind() != reflect.Slice && rv.Kind() != reflect.Array {
-		return fmt.Errorf("dbal: In expects a slice, got %T", e.values)
+	vals, err := distinct(e.values)
+	if err != nil {
+		return err
 	}
+	if limit := dialect.MaxBindParams(w.d); len(vals) > limit {
+		return fmt.Errorf("dbal: IN list of %d values exceeds the %d bind parameters of %s; split the list", len(vals), limit, w.d.Name())
+	}
+	return writeList(w, vals)
+}
+
+func writeList(w *SQLWriter, vals []any) error {
 	w.WriteString("(")
-	if rv.Len() == 0 {
+	if len(vals) == 0 {
 		w.WriteString("NULL")
 	}
+	for i, v := range vals {
+		if i > 0 {
+			w.WriteString(", ")
+		}
+		if err := w.WriteArg(v); err != nil {
+			return err
+		}
+	}
+	w.WriteString(")")
+	return nil
+}
+
+// distinct returns the values of a slice, each comparable value once.
+func distinct(slice any) ([]any, error) {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice && rv.Kind() != reflect.Array {
+		return nil, fmt.Errorf("dbal: In expects a slice, got %T", slice)
+	}
+	out := make([]any, 0, rv.Len())
 	seen := map[any]bool{}
-	n := 0
 	for i := range rv.Len() {
 		v := rv.Index(i).Interface()
 		if v != nil && reflect.ValueOf(v).Comparable() {
@@ -196,16 +224,67 @@ func (e InExpr) AppendSQL(w *SQLWriter) error {
 			}
 			seen[v] = true
 		}
-		if n > 0 {
-			w.WriteString(", ")
-		}
-		n++
-		if err := w.WriteArg(v); err != nil {
-			return err
-		}
+		out = append(out, v)
 	}
-	w.WriteString(")")
-	return nil
+	return out, nil
+}
+
+// IsIn renders left IN (values...), or left NOT IN (...) when not is set;
+// left is an expression or an identifier (Ident). A list that takes more
+// than half of the bind parameters of a statement is sent as one array
+// parameter on dialects with FeatureArrayParams (Postgres: left = ANY(?),
+// left <> ALL(?)), so it may have any length; elsewhere a list longer than
+// the limit fails before anything is sent.
+func IsIn(left Expr, values any, not bool) Expr { return isInExpr{left, values, not} }
+
+// elementValue returns v as an element of an array parameter: an
+// expression that renders as one bound argument becomes that argument, a
+// driver.Valuer its value (the driver does not convert array elements).
+func elementValue(d dialect.Dialect, v any) (any, error) {
+	if e, ok := v.(Expr); ok {
+		w := NewSQLWriter(d)
+		if err := e.AppendSQL(w); err != nil {
+			return nil, err
+		}
+		if len(w.args) != 1 || w.String() != d.Placeholder(1) {
+			return nil, fmt.Errorf("dbal: %s cannot be an element of an array parameter", w.String())
+		}
+		v = w.args[0]
+	}
+	if vv, ok := v.(driver.Valuer); ok {
+		return vv.Value()
+	}
+	return v, nil
+}
+
+type isInExpr struct {
+	left   Expr
+	values any
+	not    bool
+}
+
+func (e isInExpr) AppendSQL(w *SQLWriter) error {
+	vals, err := distinct(e.values)
+	if err != nil {
+		return err
+	}
+	if w.d.Features().Has(dialect.FeatureArrayParams) && len(vals) > dialect.MaxBindParams(w.d)/2 {
+		for i, v := range vals {
+			if vals[i], err = elementValue(w.d, v); err != nil {
+				return err
+			}
+		}
+		op := " = ANY(?)"
+		if e.not {
+			op = " <> ALL(?)"
+		}
+		return w.WriteExpr("?"+op, e.left, vals)
+	}
+	op := " IN ?"
+	if e.not {
+		op = " NOT IN ?"
+	}
+	return w.WriteExpr("?"+op, e.left, InExpr{vals})
 }
 
 // Build renders e and returns the SQL with its arguments.

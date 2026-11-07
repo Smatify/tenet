@@ -114,3 +114,40 @@ func TestColumnDeclarationVariants(t *testing.T) {
 		t.Fatal("empty comment")
 	}
 }
+
+func TestParseSort(t *testing.T) {
+	for in, want := range map[string]string{
+		"": "", "asc": "", "ASC NULLS LAST": "", "nulls last": "",
+		"asc nulls first": "NULLS FIRST", "nulls first": "NULLS FIRST",
+		"desc": "DESC", "Desc nulls first": "DESC", "desc  nulls   last": "DESC NULLS LAST",
+	} {
+		if got, err := ParseSort(in); err != nil || got != want {
+			t.Errorf("ParseSort(%q) = %q, %v; want %q", in, got, err, want)
+		}
+	}
+	for _, in := range []string{"down", "desc nulls", "asc desc", "nulls middle"} {
+		if _, err := ParseSort(in); err == nil {
+			t.Errorf("ParseSort(%q) must fail", in)
+		}
+	}
+}
+
+func TestIndexOrderDDL(t *testing.T) {
+	i := &Index{Name: "idx", Columns: []string{"starts_at", "id", "round"}, Sort: []string{"DESC NULLS LAST", ""}}
+	for n, want := range map[dialect.Name]string{
+		dialect.Postgres: `CREATE INDEX "idx" ON "m" ("starts_at" DESC NULLS LAST, "id", "round")`,
+		dialect.SQLite:   `CREATE INDEX "idx" ON "m" ("starts_at" DESC, "id", "round")`,
+		dialect.MySQL:    "CREATE INDEX `idx` ON `m` (`starts_at` DESC, `id`, `round`)",
+		dialect.MSSQL:    `CREATE INDEX [idx] ON [m] ([starts_at] DESC, [id], [round])`,
+	} {
+		if got := ddlFor(n).CreateIndex("m", i); got != want {
+			t.Errorf("%s: %s", n, got)
+		}
+	}
+	if got := ddlFor(dialect.MySQL).indexDefinition(i); got != "INDEX `idx` (`starts_at` DESC, `id`, `round`)" {
+		t.Errorf("inline: %s", got)
+	}
+	if c := i.Clone(); &c.Sort[0] == &i.Sort[0] {
+		t.Error("Clone shares Sort")
+	}
+}

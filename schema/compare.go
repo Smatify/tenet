@@ -197,6 +197,11 @@ func (c *Comparator) sameIndex(a, b *Index) bool {
 	if a.Unique != b.Unique || !a.SameColumns(b) {
 		return false
 	}
+	for n := range a.Columns {
+		if c.ddl.indexSort(a.SortOf(n)) != c.ddl.indexSort(b.SortOf(n)) {
+			return false
+		}
+	}
 	if c.name() == dialect.MySQL || c.name() == dialect.MariaDB {
 		return true // no partial indexes
 	}

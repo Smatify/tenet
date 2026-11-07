@@ -1,6 +1,7 @@
 package schema
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/smatify/tenet/dialect"
@@ -225,5 +226,25 @@ func TestNormalizePredicateCasts(t *testing.T) {
 	}
 	if normalizePredicate("a = 1") == normalizePredicate("b = 1") {
 		t.Error("different columns compare equal")
+	}
+}
+
+func TestCompareIndexOrder(t *testing.T) {
+	from, to := buildBlog(), buildBlog()
+	to.Table("posts").Indexes[0].Sort = []string{"DESC"}
+	for _, n := range []dialect.Name{dialect.Postgres, dialect.MySQL, dialect.SQLite, dialect.MSSQL} {
+		d := cmpFor(n).Compare(from, to)
+		if d.IsEmpty() || !strings.Contains(d.String(), " DESC") {
+			t.Fatalf("%s: direction change not found: %s", n, d)
+		}
+	}
+	// Only Postgres keeps the place of NULL values in an index.
+	from.Table("posts").Indexes[0].Sort = []string{"DESC"}
+	to.Table("posts").Indexes[0].Sort = []string{"DESC NULLS LAST"}
+	if cmpFor(dialect.Postgres).Compare(from, to).IsEmpty() {
+		t.Fatal("NULLS LAST differs on Postgres")
+	}
+	if !cmpFor(dialect.MySQL).Compare(from, to).IsEmpty() || !cmpFor(dialect.SQLite).Compare(from, to).IsEmpty() {
+		t.Fatal("NULLS LAST is ignored where indexes do not keep it")
 	}
 }

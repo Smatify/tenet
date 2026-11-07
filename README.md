@@ -55,6 +55,9 @@ See [examples/blog](examples/blog) for a complete project generated this way.
   `tenet:"generated:identity"` on an integer field other than the identifier lets the
   database number new rows (a public number next to a UUID; unique, read back on
   insert, not on SQLite; a table has at most one identity column).
+  Indexes over several fields go on the header, each column with its order:
+  ``tenet.Entity `tenet:"index:author|createdAt desc nulls last"` ``
+  (`?{approvedAt} IS NULL` after a group makes it partial).
 - **Doctrine style** (default of `make:entity`): unexported fields with generated
   getters that call `tenet.Touch` for lazy loading (`tenet generate --accessors` writes the
   missing ones for fields added by hand). **Go style**: exported fields and `tenet.Ref[T]`.
@@ -62,20 +65,28 @@ See [examples/blog](examples/blog) for a complete project generated this way.
   `Transactional`; only changed columns are written; lifecycle hooks and an event manager.
 - **Associations**: manyToOne, oneToMany, oneToOne, manyToMany with `tenet.Collection[T]`
   (lazy, extra lazy), cascades, orphan removal, `Preload` and `fetch:eager`.
-- **Queries** name fields with the generated refs (`entity.PostFields.Title`) or with
-  strings (`"title"`, `"a.name"` for a joined alias, `"author.tags"` as preload path).
+- **Queries** name fields with the generated refs (`entity.PostFields.Title`,
+  `entity.AuthorFields.Name` on a joined author): a renamed or misspelled field breaks
+  the build. Strings (`"title"`, `"a.name"` for a joined alias, `"author.tags"` as
+  preload path) fail only when the query runs, and depend on the style (Go names in Go
+  style entities, the unexported names in Doctrine style); for code without generated refs,
   `go run github.com/smatify/tenet/gen/cmd/vet ./...` reports string field names the
   entity does not have, and field accesses without `tenet.Touch`.
   `tenet.Raw("{title} ILIKE ? OR {id} IN ?", pattern, ids)` inserts columns for `{field}`;
   a slice after `IN` is expanded, anywhere else (`= ANY(?)`) it is one array parameter.
+  `tenet.In` sends a list of any length on Postgres (as `= ANY(?)` once it is long).
+  `OrderBy(f, tenet.Desc.NullsLast())` places NULL values (natively on Postgres and
+  SQLite, elsewhere with a `CASE` term unless the database puts them there anyway).
 - **Projections and bulk writes** keep field names where a query is more than "load
   entities": `JoinOn`/`LeftJoinOn` join an entity on a condition, `JoinSub`/`LeftJoinSub` a sub query,
   `JoinLateral`/`LeftJoinLateral` a sub query per row, `Columns` and `GroupBy`
   select expressions (`Column` with arguments, `Distinct`), `tenet.Scan[R]` reads their rows into a
   struct (columns by `db` tag or snake case name) or a single value, `Sub()` uses a query as a sub query (`As`
   names its alias, so a sub query inside can refer to it as plain SQL, `a.name`),
-  `tenet.Update[T]` changes, `tenet.Insert[T]` adds and `tenet.Delete[T]` removes many rows in one statement (entities,
-  `INSERT … SELECT`, upserts with `OnConflict` and `{excluded.Field}`); listeners get
+  `tenet.Update[T]` changes and `tenet.Delete[T]` removes many rows in one statement,
+  `tenet.Insert[T]` adds them (entities, in statements within the bind limit and one
+  transaction, also from a stream with `RowsFrom` so millions of rows need not be in memory;
+  `INSERT … SELECT`; upserts with `OnConflict` and `{excluded.Field}`); listeners get
   `EventPostBulk` with the IDs of the rows after the commit. Bulk writes bypass the unit of
   work: no hooks, loaded entities keep their values, IDs the database generates are not set on
   inserted entities.

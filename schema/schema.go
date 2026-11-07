@@ -326,10 +326,53 @@ type Index struct {
 	Unique  bool
 	Primary bool
 	Where   string // partial index predicate (Postgres, SQLite, SQL Server)
+	// Sort holds the order of each column as ParseSort returns it; nil or
+	// "" means ascending.
+	Sort []string
 }
 
 // SetName overrides the generated name.
 func (i *Index) SetName(n string) *Index { i.Name = n; return i }
+
+// SortOf returns the order of the n-th column ("" for ascending).
+func (i *Index) SortOf(n int) string {
+	if n < len(i.Sort) {
+		return i.Sort[n]
+	}
+	return ""
+}
+
+// ParseSort returns the order of an index column, e.g. "desc nulls last",
+// in its canonical form: "" (ascending), "DESC", "NULLS FIRST" or
+// "DESC NULLS LAST". The place of NULL values is kept only where it differs
+// from the default of Postgres (last ascending, first descending), the one
+// database that stores it in an index; the others take the direction only.
+func ParseSort(s string) (string, error) {
+	words := strings.Fields(strings.ToUpper(s))
+	desc := len(words) > 0 && words[0] == "DESC"
+	if len(words) > 0 && (words[0] == "ASC" || words[0] == "DESC") {
+		words = words[1:]
+	}
+	nullsFirst := desc
+	switch strings.Join(words, " ") {
+	case "":
+	case "NULLS FIRST":
+		nullsFirst = true
+	case "NULLS LAST":
+		nullsFirst = false
+	default:
+		return "", fmt.Errorf("schema: invalid index order %q (want asc or desc, optionally followed by nulls first or nulls last)", s)
+	}
+	switch {
+	case desc && nullsFirst:
+		return "DESC", nil
+	case desc:
+		return "DESC NULLS LAST", nil
+	case nullsFirst:
+		return "NULLS FIRST", nil
+	}
+	return "", nil
+}
 
 // SetWhere makes the index partial.
 func (i *Index) SetWhere(pred string) *Index { i.Where = pred; return i }
@@ -338,6 +381,7 @@ func (i *Index) SetWhere(pred string) *Index { i.Where = pred; return i }
 func (i *Index) Clone() *Index {
 	cp := *i
 	cp.Columns = slices.Clone(i.Columns)
+	cp.Sort = slices.Clone(i.Sort)
 	return &cp
 }
 

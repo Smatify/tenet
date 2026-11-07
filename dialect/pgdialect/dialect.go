@@ -16,7 +16,7 @@ func New() *Dialect {
 		dialect.FeatureCTE | dialect.FeatureSavepoint | dialect.FeatureReleaseSavepoint |
 		dialect.FeatureSequences | dialect.FeatureTransactionalDDL | dialect.FeatureUpsertOnConflict |
 		dialect.FeatureMerge | dialect.FeatureLimitOffset | dialect.FeatureSelectForUpdate |
-		dialect.FeatureIdentityColumns | dialect.FeatureSkipLocked | dialect.FeatureUpdateFrom}
+		dialect.FeatureIdentityColumns | dialect.FeatureSkipLocked | dialect.FeatureUpdateFrom | dialect.FeatureArrayParams | dialect.FeatureNullsOrder}
 }
 
 // Name implements dialect.Dialect.

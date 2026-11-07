@@ -16,8 +16,9 @@ curl -H 'X-Workspace: acme' localhost:8080/tasks
   workspaces apart: queries, pages and lookups only see the caller's rows.
 - `DELETE` removes softly (`tenet.SoftDelete`): the row keeps a `deleted_at`
   and disappears from queries.
-- The list is a page (`tenet.Paginate`) with the assignees joined into the
-  query (`With`), `PATCH` writes only the changed columns.
+- The list is a page (`tenet.Paginate`) sorted by due date with undated
+  tasks last (`tenet.Asc.NullsLast()`) and the assignees joined into the
+  query (`With`); `PATCH` writes only the changed columns.
 - `tenet.RecoverLazyLoad` answers a failed lazy load with a 500.
 
 `go test` runs the API with `httptest` against SQLite in memory.

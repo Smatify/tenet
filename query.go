@@ -32,6 +32,10 @@ var (
 	Raw       = orm.Raw
 )
 
+// Order is a sort direction: Asc or Desc, optionally with the place of
+// NULL values, e.g. tenet.Desc.NullsLast().
+type Order = dbal.Order
+
 // Sort directions.
 const (
 	Asc  = dbal.Asc
@@ -133,7 +137,7 @@ func (q *Query[T]) Sub() dbal.Expr { return q.q.Sub() }
 func (q *Query[T]) Where(conds ...Cond) *Query[T] { q.q.Where(conds...); return q }
 
 // OrderBy sorts by a field or by an expression given as Raw.
-func (q *Query[T]) OrderBy(field any, dir dbal.Order) *Query[T] { q.q.OrderBy(field, dir); return q }
+func (q *Query[T]) OrderBy(field any, dir Order) *Query[T] { q.q.OrderBy(field, dir); return q }
 
 // Limit sets the maximum number of results.
 func (q *Query[T]) Limit(n int) *Query[T] { q.q.Limit(n); return q }
@@ -241,7 +245,7 @@ type Criteria map[string]any
 type FindOption func(*orm.Query)
 
 // OrderBy sorts FindBy results.
-func OrderBy(field any, dir dbal.Order) FindOption {
+func OrderBy(field any, dir Order) FindOption {
 	return func(q *orm.Query) { q.OrderBy(field, dir) }
 }
 
