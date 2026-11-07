@@ -11,7 +11,7 @@ import (
 
 func project(t *testing.T) string {
 	dir := t.TempDir()
-	if err := os.WriteFile(filepath.Join(dir, "go.mod"), []byte("module example.com/app\n\ngo 1.27\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "go.mod"), []byte("module example.com/app\n\ngo 1.26.0\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	return dir
@@ -50,7 +50,7 @@ func TestInitErrors(t *testing.T) {
 		t.Fatal("missing go.mod")
 	}
 	dir := t.TempDir()
-	_ = os.WriteFile(filepath.Join(dir, "go.mod"), []byte("go 1.27\n"), 0o644)
+	_ = os.WriteFile(filepath.Join(dir, "go.mod"), []byte("go 1.26.0\n"), 0o644)
 	if _, err := ModulePath(dir); err == nil {
 		t.Fatal("go.mod without module")
 	}

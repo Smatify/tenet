@@ -1,8 +1,6 @@
 module github.com/smatify/smorm/dialect/sqlitedialect
 
-go 1.27
-
-toolchain go1.27.2
+go 1.26.0
 
 require (
 	github.com/smatify/smorm v0.0.0

@@ -17,7 +17,7 @@ func tempModule(t *testing.T) string {
 	_, file, _, _ := runtime.Caller(0)
 	core := filepath.Join(filepath.Dir(file), "..", "..")
 	dir := t.TempDir()
-	gomod := "module example.com/app\n\ngo 1.27\n\nrequire " + importPath() + " v0.0.0\n\nreplace " + importPath() + " => " + core + "\n"
+	gomod := "module example.com/app\n\ngo 1.26.0\n\nrequire " + importPath() + " v0.0.0\n\nreplace " + importPath() + " => " + core + "\n"
 	if err := os.WriteFile(filepath.Join(dir, "go.mod"), []byte(gomod), 0o644); err != nil {
 		t.Fatal(err)
 	}

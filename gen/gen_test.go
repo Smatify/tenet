@@ -40,7 +40,7 @@ func TestRenderMatchesCommittedFile(t *testing.T) {
 
 func TestGenerateWritesAndRemoves(t *testing.T) {
 	dir := t.TempDir()
-	mod := "module example.com/x\n\ngo 1.27\n"
+	mod := "module example.com/x\n\ngo 1.26.0\n"
 	write := func(name, s string) {
 		if err := os.WriteFile(filepath.Join(dir, name), []byte(s), 0o644); err != nil {
 			t.Fatal(err)
@@ -90,7 +90,7 @@ func TestGenerateIgnoresStaleGeneratedCode(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	write("go.mod", "module example.com/x\n\ngo 1.27\n")
+	write("go.mod", "module example.com/x\n\ngo 1.26.0\n")
 	write("x.go", "package x\n\ntype A struct{ B int }\n")
 	// The generated file still refers to a field that was removed.
 	write(FileName, "package x\n\nvar _ = A{}.Removed\n")

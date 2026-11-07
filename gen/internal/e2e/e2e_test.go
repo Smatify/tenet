@@ -102,7 +102,7 @@ func TestWorkflow(t *testing.T) {
 	root := repoRoot()
 	dir := t.TempDir()
 	mod := "github.com/smatify/" + brand.Name
-	gomod := "module example.com/blog\n\ngo 1.27\n\nrequire (\n" +
+	gomod := "module example.com/blog\n\ngo 1.26.0\n\nrequire (\n" +
 		"\t" + mod + " v0.0.0\n\t" + mod + "/gen v0.0.0\n\t" + mod + "/dialect/sqlitedialect v0.0.0\n)\n\n" +
 		"replace " + mod + " => " + root + "\n" +
 		"replace " + mod + "/gen => " + filepath.Join(root, "gen") + "\n" +
