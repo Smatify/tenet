@@ -23,6 +23,9 @@ posts, _ := smorm.NewQuery[entity.Post](em).
 	All(ctx)
 ```
 
+Go 1.26 or newer. In production smorm runs on Postgres so far; MySQL/MariaDB,
+SQLite and SQL Server pass the same test suite.
+
 ## Getting started
 
 ```bash
@@ -92,8 +95,16 @@ they write; on any other, building the statement fails with an error (no SQL is 
 | `JoinLateral`, `LeftJoinLateral` | yes | no | no | no |
 | IDs in `EventPostBulk` (`RETURNING`) | yes | yes | nil (any row may have changed) | nil |
 
-Identifiers, the order of events within `Flush`, transactions, listeners
-for committed changes and soft delete: [docs/lifecycle.md](docs/lifecycle.md).
+## Documentation
+
+- [Lifecycle](docs/lifecycle.md): the entity manager and its identity map,
+  identifiers, the order of events within `Flush`, transactions, listeners
+  for committed changes, soft delete.
+- [Migrations](docs/migrations.md): writing, running and rolling back.
+- [Generator and maker](docs/generator.md): `smorm init`, `make:*`,
+  generated code, `vet`.
+- Examples on [pkg.go.dev](https://pkg.go.dev/github.com/smatify/smorm);
+  the ones of the SQLite dialect run with their output.
 
 ## Lazy loading
 
@@ -154,3 +165,7 @@ column itself); the others one UPDATE per row in a transaction.
 
 The name `smorm` is defined once in `internal/brand`; `scripts/rebrand.sh <name>`
 renames the whole project.
+
+## License
+
+[MIT](LICENSE)

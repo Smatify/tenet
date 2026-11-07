@@ -12,6 +12,24 @@
   `ErrClosed`): the database rolled back, but the entities still hold the
   changes. Start over with a new entity manager.
 
+## Identity map
+
+- Each row is loaded once per entity manager: `Find`, queries and lazy
+  loads of the same row return the same pointer, so a change made through
+  one is seen through all of them, and `Flush` writes it once.
+- A row already in the map is not overwritten by a later query: the entity
+  keeps the values (and unflushed changes) it has. `Refresh` reloads one
+  entity from the database and discards its unflushed changes.
+- An entity manager therefore grows stale and large if it lives long: keep
+  one per HTTP request, job or event, not one per process. A long job over
+  many rows flushes and calls `Clear` in batches (or uses `Detach` for the
+  entities it is done with) to keep memory flat; entities from before the
+  `Clear` are no longer managed and are not written.
+- Entities belong to the entity manager that loaded or persisted them. An
+  entity of another entity manager reached through a relationship is linked
+  when it is stored already, and reported (`NewEntityFoundError`) when it
+  is new and the relationship does not cascade persist.
+
 ## Identifiers
 
 - `Persist` assigns UUID identifiers (`smorm.UUIDID`, `generated:uuid7`)
