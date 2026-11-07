@@ -4,7 +4,7 @@ go 1.26.0
 
 require (
 	github.com/microsoft/go-mssqldb v1.11.2
-	github.com/smatify/tenet v0.0.0
+	github.com/smatify/tenet v0.1.0
 	github.com/testcontainers/testcontainers-go v0.44.0
 	github.com/testcontainers/testcontainers-go/modules/mssql v0.44.0
 )

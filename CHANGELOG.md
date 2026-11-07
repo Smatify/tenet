@@ -1,6 +1,6 @@
 # Changelog
 
-## v0.1.0 (unreleased)
+## v0.1.0 (2026-11-07)
 
 The first release. The API may still change before v1.0.0.
 

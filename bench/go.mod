@@ -11,8 +11,8 @@ replace (
 require (
 	entgo.io/ent v0.14.6
 	github.com/jackc/pgx/v5 v5.11.0
-	github.com/smatify/tenet v0.0.0
-	github.com/smatify/tenet/dialect/pgdialect v0.0.0-00010101000000-000000000000
+	github.com/smatify/tenet v0.1.0
+	github.com/smatify/tenet/dialect/pgdialect v0.1.0
 	github.com/testcontainers/testcontainers-go v0.44.0
 	github.com/testcontainers/testcontainers-go/modules/postgres v0.44.0
 	github.com/uptrace/bun v1.3.0

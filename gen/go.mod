@@ -4,7 +4,7 @@ go 1.26.0
 
 require (
 	github.com/dave/dst v0.28.0
-	github.com/smatify/tenet v0.0.0
+	github.com/smatify/tenet v0.1.0
 	golang.org/x/tools v0.52.0
 )
 

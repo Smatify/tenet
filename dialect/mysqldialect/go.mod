@@ -4,7 +4,7 @@ go 1.26.0
 
 require (
 	github.com/go-sql-driver/mysql v1.10.1
-	github.com/smatify/tenet v0.0.0
+	github.com/smatify/tenet v0.1.0
 	github.com/testcontainers/testcontainers-go v0.44.0
 	github.com/testcontainers/testcontainers-go/modules/mariadb v0.44.0
 	github.com/testcontainers/testcontainers-go/modules/mysql v0.44.0

@@ -3,9 +3,9 @@ module example.com/blog
 go 1.26.0
 
 require (
-	github.com/smatify/tenet v0.0.0
-	github.com/smatify/tenet/dialect/sqlitedialect v0.0.0
-	github.com/smatify/tenet/gen v0.0.0
+	github.com/smatify/tenet v0.1.0
+	github.com/smatify/tenet/dialect/sqlitedialect v0.1.0
+	github.com/smatify/tenet/gen v0.1.0
 	modernc.org/sqlite v1.60.1
 )
 
