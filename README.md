@@ -178,9 +178,6 @@ is one statement without post hooks.
 column itself); the others one UPDATE per row in a transaction.
 ⁴ tenet joins the author into the query (`With` on a to-one association).
 
-The name `tenet` is defined once in `internal/brand`; `scripts/rebrand.sh <name>`
-renames the whole project.
-
 ## License
 
 [MIT](LICENSE)

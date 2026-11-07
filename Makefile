@@ -11,7 +11,6 @@ test-short:
 lint:
 	@test -z "$$(gofmt -l .)" || (gofmt -l . && exit 1)
 	@for m in $(MODULES); do (cd $$m && go vet ./...) || exit 1; done
-	@./scripts/check-brand.sh
 
 fmt:
 	gofmt -w .

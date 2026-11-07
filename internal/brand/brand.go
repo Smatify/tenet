@@ -1,6 +1,6 @@
 // Package brand is the single source of truth for the project name and every
 // identifier derived from it. Nothing else in the code base may hard-code the
-// name; use scripts/rebrand.sh to rename the project.
+// name.
 package brand
 
 import "strings"
