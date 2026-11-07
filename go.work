@@ -5,6 +5,8 @@ use (
 	.
 	./gen
 	./examples/blog
+	./examples/shop
+	./examples/tasks
 	./extra/tenetotel
 	./dialect/mssqldialect
 	./dialect/mysqldialect

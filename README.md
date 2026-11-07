@@ -105,6 +105,10 @@ they write; on any other, building the statement fails with an error (no SQL is 
   generated code, `vet`.
 - Examples on [pkg.go.dev](https://pkg.go.dev/github.com/smatify/tenet);
   the ones of the SQLite dialect run with their output.
+- Example projects: [blog](examples/blog) (generated with the maker,
+  migrations), [shop](examples/shop) (orders, transactions, optimistic
+  locking, upserts, reports), [tasks](examples/tasks) (JSON API, one entity
+  manager per request, workspace filter, soft delete, pagination).
 
 ## Lazy loading
 

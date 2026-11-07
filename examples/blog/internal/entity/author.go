@@ -1,6 +1,10 @@
 package entity
 
-import "github.com/smatify/tenet"
+import (
+	"slices"
+
+	"github.com/smatify/tenet"
+)
 
 // Author is an entity.
 type Author struct {
@@ -33,6 +37,19 @@ func (a *Author) RemovePost(item *Post) *Author {
 		if item.Author() == a {
 			item.SetAuthor(nil)
 		}
+	}
+	return a
+}
+
+// SetPosts replaces the posts with items.
+func (a *Author) SetPosts(items []*Post) *Author {
+	for _, item := range a.Posts() {
+		if !slices.Contains(items, item) {
+			a.RemovePost(item)
+		}
+	}
+	for _, item := range items {
+		a.AddPost(item)
 	}
 	return a
 }

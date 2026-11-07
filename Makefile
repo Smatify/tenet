@@ -1,4 +1,4 @@
-MODULES := . gen examples/blog extra/tenetotel $(patsubst %/go.mod,%,$(wildcard dialect/*/go.mod))
+MODULES := . gen $(patsubst %/go.mod,%,$(wildcard examples/*/go.mod)) extra/tenetotel $(patsubst %/go.mod,%,$(wildcard dialect/*/go.mod))
 
 .PHONY: test test-short lint fmt tidy cover bench
 

@@ -1,7 +1,7 @@
 # Example: blog
 
-This project was generated end to end by the workflow test
-(`gen/internal/e2e`) with nothing but the console:
+Entities, migrations and console of this project were generated with nothing
+but the console (the workflow test `gen/internal/e2e` repeats these steps):
 
 ```bash
 go run github.com/smatify/tenet/gen/cmd/tenet init --dialect sqlite
@@ -21,6 +21,8 @@ go run ./cmd/console migrations:migrate -n
 go run ./cmd/demo
 ```
 
-`cmd/demo` persists an author with two posts, then loads a post in a new
-entity manager and reads `post.Author().Name()` — the author is loaded lazily
-by the generated getter.
+[cmd/demo](cmd/demo/main.go) persists two authors with their posts, then
+queries with the generated field references (`entity.PostFields.Author`),
+loads an author lazily through the generated getter, counts posts per author
+with `tenet.Scan` and updates many rows in one statement. `go test ./...`
+runs it against SQLite in memory.
