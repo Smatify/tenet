@@ -570,6 +570,38 @@ func TestEntityIndexes(t *testing.T) {
 	}
 }
 
+type VisitedPost struct {
+	entity.Header `tenet:"unique:post|visitor;slug?{slug} IS NOT NULL"`
+	ID            int64
+	post          *User `tenet:"manyToOne,notnull"`
+	visitor       *User `tenet:"manyToOne,notnull"`
+	slug          *string
+}
+
+func TestEntityUniqueIndexes(t *testing.T) {
+	e, err := For[VisitedPost](NewRegistry())
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got []string
+	for _, d := range e.Indexes {
+		if d.Unique {
+			got = append(got, d.Name+"="+strings.Join(d.Columns, ",")+"?"+d.Where)
+		}
+	}
+	want := []string{"uniq_visited_post_post_id_visitor_id=post_id,visitor_id?", "puniq_visited_post_slug=slug?slug IS NOT NULL"}
+	if !slices.Equal(got, want) {
+		t.Fatalf("unique indexes = %v", got)
+	}
+	type bad struct {
+		entity.Header `tenet:"unique:missing"`
+		ID            int64
+	}
+	if _, err := For[bad](NewRegistry()); err == nil || !strings.Contains(err.Error(), `unique: unknown field "missing"`) {
+		t.Fatalf("err = %v", err)
+	}
+}
+
 type PendingPost struct {
 	entity.Header `tenet:"index:author|CreatedAt?{approvedAt} IS NULL AND {author} IS NOT NULL"`
 	ID            int64

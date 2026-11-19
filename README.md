@@ -57,7 +57,9 @@ See [examples/blog](examples/blog) for a complete project generated this way.
   insert, not on SQLite; a table has at most one identity column).
   Indexes over several fields go on the header, each column with its order:
   ``tenet.Entity `tenet:"index:author|createdAt desc nulls last"` ``
-  (`?{approvedAt} IS NULL` after a group makes it partial).
+  (`?{approvedAt} IS NULL` after a group makes it partial); `unique:campaign|user`
+  takes the same groups for unique indexes. Fields can also join a named index
+  with `index:<name>` or `unique:<name>` on each of them.
 - **Doctrine style** (default of `make:entity`): unexported fields with generated
   getters that call `tenet.Touch` for lazy loading (`tenet generate --accessors` writes the
   missing ones for fields added by hand). **Go style**: exported fields and `tenet.Ref[T]`.

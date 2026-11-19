@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- `unique:` on the entity header declares unique indexes over several fields
+  or to-one associations, with the groups, orders and predicates of `index:`
+  (`unique:campaign|user`).
+
 ## gen v0.1.1 (2026-11-07)
 
 - `go run github.com/smatify/tenet/gen/cmd/tenet@latest` works: the module

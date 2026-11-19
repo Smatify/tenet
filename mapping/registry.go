@@ -153,7 +153,7 @@ func (e *MappingError) Error() string {
 	return fmt.Sprintf("%s: %s: %s", brand.Name, e.Entity, e.Msg)
 }
 
-var entityOptions = map[string]bool{"table": true, "repository": true, "comment": true, "sequence": true, "index": true,
+var entityOptions = map[string]bool{"table": true, "repository": true, "comment": true, "sequence": true, "index": true, "unique": true,
 	"inheritance": true, "discriminator": true, "discriminatorValue": true, "abstract": true,
 	"cache": true, "cacheTTL": true}
 
@@ -310,6 +310,7 @@ func (r *Registry) parse(t reflect.Type) (*Entity, error) {
 		}
 	}
 	e.indexSpec = tag.Get("index")
+	e.uniqueSpec = tag.Get("unique")
 	e.index()
 	return e, nil
 }
@@ -321,9 +322,14 @@ func (r *Registry) parse(t reflect.Type) (*Entity, error) {
 // after "?" that makes the index partial, naming fields in braces:
 // index:subsite?{approvedAt} IS NULL indexes only the rows it matches. A
 // field may be followed by its order: index:startsAt desc nulls last|id.
-func (e *Entity) entityIndexes(v string) error {
+// unique:campaign|user takes the same groups for unique indexes.
+func (e *Entity) entityIndexes(v string, unique bool) error {
 	if v == "" {
 		return nil
+	}
+	kind, prefix := "index", "idx"
+	if unique {
+		kind, prefix = "unique", "uniq"
 	}
 	column := func(name string) string {
 		for _, f := range e.Fields {
@@ -341,19 +347,19 @@ func (e *Entity) entityIndexes(v string) error {
 			name, order, _ := strings.Cut(item, " ")
 			col := column(name)
 			if col == "" {
-				return fmt.Errorf("index: unknown field %q", name)
+				return fmt.Errorf("%s: unknown field %q", kind, name)
 			}
 			sort, err := schema.ParseSort(order)
 			if err != nil {
-				return fmt.Errorf("index: %w", err)
+				return fmt.Errorf("%s: %w", kind, err)
 			}
 			cols, sorts = append(cols, col), append(sorts, sort)
 			sorted = sorted || sort != ""
 		}
 		if len(cols) == 0 {
-			return fmt.Errorf("index: empty group in %q", v)
+			return fmt.Errorf("%s: empty group in %q", kind, v)
 		}
-		d := &IndexDef{Name: schema.IdentifierName("idx", e.Table, cols), Columns: cols}
+		d := &IndexDef{Name: schema.IdentifierName(prefix, e.Table, cols), Columns: cols, Unique: unique}
 		if sorted {
 			d.Sort = sorts
 		}
@@ -363,9 +369,9 @@ func (e *Entity) entityIndexes(v string) error {
 				return err
 			}
 			if d.Where == "" {
-				return fmt.Errorf("index: empty predicate in %q", v)
+				return fmt.Errorf("%s: empty predicate in %q", kind, v)
 			}
-			d.Name = schema.IdentifierName("pidx", e.Table, cols)
+			d.Name = schema.IdentifierName("p"+prefix, e.Table, cols)
 		}
 		e.Indexes = append(e.Indexes, d)
 	}
@@ -823,7 +829,10 @@ func (r *Registry) resolve(e *Entity) error {
 			a.JoinTable.InverseJoinColumns = []JoinColumn{{Name: tgt, Referenced: tgtID.Column, OnDelete: "CASCADE"}}
 		}
 	}
-	if err := e.entityIndexes(e.indexSpec); err != nil {
+	if err := e.entityIndexes(e.indexSpec, false); err != nil {
+		return &MappingError{Entity: e.Name, Msg: err.Error()}
+	}
+	if err := e.entityIndexes(e.uniqueSpec, true); err != nil {
 		return &MappingError{Entity: e.Name, Msg: err.Error()}
 	}
 	e.index()

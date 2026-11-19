@@ -67,6 +67,7 @@ type Entity struct {
 	Generated bool
 
 	indexSpec    string // entity level index option, applied in resolve
+	uniqueSpec   string // entity level unique option, applied in resolve
 	byName       map[string]*Field
 	byColumn     map[string]*Field
 	assocBy      map[string]*Association
