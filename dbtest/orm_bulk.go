@@ -119,12 +119,13 @@ func testORMBulkInsert(t *testing.T, db *dbal.DB) {
 	em := newEM()
 	var events int
 	em.Events().On(func(context.Context, *tenet.EventArgs) error { events++; return nil }, tenet.EventPostBulk)
-	if d := db.Dialect().Name(); d != dialect.Postgres && d != dialect.SQLite {
+	if d := db.Dialect().Name(); d == dialect.MSSQL {
 		if _, err := tenet.Insert[ormAuthor](em).Rows(&ormAuthor{name: "ann"}).Exec(ctx); err == nil {
 			t.Fatal("bulk inserts must fail on " + string(d))
 		}
 		return
 	}
+	returnsIDs := db.Dialect().Features().Has(dialect.FeatureInsertReturning)
 	n, err := tenet.Insert[ormAuthor](em).Rows(&ormAuthor{name: "ann", score: 1}, &ormAuthor{name: "bob", score: 2}).Exec(ctx)
 	must(t, err)
 	if n != 2 || events != 1 {
@@ -146,7 +147,11 @@ func testORMBulkInsert(t *testing.T, db *dbal.DB) {
 	n, err = tenet.Insert[ormAuthor](em).Rows(&ormAuthor{name: "ann", score: 10}, &ormAuthor{name: "cid", score: 3}).
 		OnConflict("name").Set("score", tenet.Raw("COALESCE({score}, 0) + COALESCE({excluded.score}, 0)")).Exec(ctx)
 	must(t, err)
-	if got := scores(); n != 2 || got["ann"] != 11 || got["bob"] != 2 || got["cid"] != 3 {
+	written := 2
+	if db.Dialect().Name() == dialect.MySQL {
+		written = 3 // MySQL counts the updated row twice (MariaDB returns the rows)
+	}
+	if got := scores(); n != written || got["ann"] != 11 || got["bob"] != 2 || got["cid"] != 3 {
 		t.Fatalf("upsert of %d rows: %v", n, got)
 	}
 	n, err = tenet.Insert[ormAuthor](em).Rows(&ormAuthor{name: "bob", score: 9}).OnConflict("name").DoNothing().Exec(ctx)
@@ -177,7 +182,11 @@ func testORMBulkInsert(t *testing.T, db *dbal.DB) {
 	}
 	n, err = tenet.Insert[ormAuthor](em).Rows(&ormAuthor{name: "first"}).RowsFrom(stream(1200, "")).Exec(ctx)
 	must(t, err)
-	if n != 1201 || ids != 1201 || events < 3 {
+	wantIDs := 1201
+	if !returnsIDs {
+		wantIDs = 0
+	}
+	if n != 1201 || ids != wantIDs || events < 3 {
 		t.Fatalf("stream: %d rows, %d IDs in %d events", n, ids, events)
 	}
 	// A failing statement rolls back the earlier ones and stops the stream:

@@ -5,6 +5,9 @@
 - `unique:` on the entity header declares unique indexes over several fields
   or to-one associations, with the groups, orders and predicates of `index:`
   (`unique:campaign|user`).
+- `tenet.Insert[T]` runs on MySQL and MariaDB: bulk inserts, streamed rows,
+  `INSERT … SELECT` and upserts (`ON DUPLICATE KEY UPDATE`, with
+  `{excluded.Field}` as the proposed row).
 - A loaded row whose identifier is the zero value (e.g. a user with ID 0) is
   written as that value when another entity references it; it was written
   as NULL.

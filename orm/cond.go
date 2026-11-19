@@ -248,6 +248,11 @@ func (r rawCond) build(q *Query) (dbal.Expr, error) {
 			return m
 		}
 		w := dbal.NewSQLWriter(d)
+		// MySQL names the proposed row "new" (MariaDB: VALUES(col)), not excluded.
+		if alias, column, _ := strings.Cut(col, "."); alias == excludedAlias && isMySQLFamily(d) {
+			_ = dbal.Excluded(column).AppendSQL(w)
+			return w.String()
+		}
 		w.WriteIdent(col)
 		return w.String()
 	})

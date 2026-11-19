@@ -181,8 +181,12 @@ func (em *EntityManager) bulk(ctx context.Context, args *EventArgs) error {
 // Like Update it bypasses the unit of work: the entities are not managed
 // afterwards and lifecycle hooks do not run; identifiers and timestamps
 // are assigned as on a flush. Listeners get EventPostBulk with the IDs of
-// the rows written. Postgres and SQLite only. Build it with
-// EntityManager.NewInsert.
+// the rows written (none on MySQL, which has no RETURNING, nor on MariaDB
+// with DoNothing). Not on SQL Server. Build it with EntityManager.NewInsert.
+//
+// On MySQL and MariaDB a conflict is any unique key (the OnConflict fields
+// are not checked). MySQL counts an updated row twice in Exec, as it
+// reports affected rows.
 type Insert struct {
 	q         *Query
 	rows      []any
@@ -198,16 +202,24 @@ type Insert struct {
 // updates: {excluded.Field}.
 const excludedAlias = "excluded"
 
-// NewInsert starts a bulk insert of the entity type t (alias "t0").
+// NewInsert starts a bulk insert of the entity type t (alias "t0"; on
+// MySQL and MariaDB the table name, as INSERT takes no alias there).
 func (em *EntityManager) NewInsert(t reflect.Type) *Insert {
 	q := em.NewQuery(t)
 	if q.err == nil {
 		if q.meta.Inheritance == mapping.Joined {
 			q.fail(fmt.Errorf("insert: %s uses joined inheritance", q.meta.Name))
 		}
+		if isMySQLFamily(em.db.Dialect()) {
+			q.As(q.meta.Table)
+		}
 		q.aliases[excludedAlias] = q.meta
 	}
 	return &Insert{q: q}
+}
+
+func isMySQLFamily(d dialect.Dialect) bool {
+	return d.Name() == dialect.MySQL || d.Name() == dialect.MariaDB
 }
 
 // Rows adds entities (pointers) as rows.
@@ -245,7 +257,7 @@ func (i *Insert) check() error {
 	if i.q.err != nil {
 		return i.q.err
 	}
-	if d := i.q.em.db.Dialect().Name(); d != dialect.Postgres && d != dialect.SQLite {
+	if d := i.q.em.db.Dialect().Name(); d == dialect.MSSQL {
 		return fmt.Errorf("insert: not supported by %s", d)
 	}
 	if (len(i.rows) > 0 || i.seq != nil) && i.sel != nil {
@@ -261,7 +273,11 @@ func (i *Insert) build(db dbal.IDB, rows []any) (*dbal.InsertQuery, error) {
 	}
 	q := i.q
 	em, meta := q.em, q.meta
+	d := em.db.Dialect()
 	out := db.NewInsert().TableAs(meta.Table, q.root)
+	if isMySQLFamily(d) {
+		out.Table(meta.Table)
+	}
 	switch {
 	case i.sel != nil:
 		cols := make([]string, len(i.selFields))
@@ -309,14 +325,26 @@ func (i *Insert) build(db dbal.IDB, rows []any) (*dbal.InsertQuery, error) {
 			out.DoUpdateSet(f.Column, "?", v)
 		}
 	}
-	if id := meta.SingleID(); id != nil {
+	if id := i.returnedID(); id != nil {
 		col := q.root + "." + id.Column
-		if em.db.Dialect().Name() == dialect.SQLite {
+		if d.Name() == dialect.SQLite || isMySQLFamily(d) {
 			col = id.Column
 		}
 		out.Returning(col)
 	}
 	return out, nil
+}
+
+// returnedID is the identifier the insert reads back for EventPostBulk,
+// or nil when the database cannot return it (MySQL). MariaDB would return
+// the existing row of a DoNothing conflict too, so there the affected rows
+// count instead.
+func (i *Insert) returnedID() *mapping.Field {
+	d := i.q.em.db.Dialect()
+	if !d.Features().Has(dialect.FeatureInsertReturning) || i.nothing && isMySQLFamily(d) {
+		return nil
+	}
+	return i.q.meta.SingleID()
 }
 
 // insertColumns returns the fields an insert of meta writes and their
@@ -418,7 +446,7 @@ func (i *Insert) Exec(ctx context.Context) (int, error) {
 		if err != nil {
 			return 0, err
 		}
-		return em.runBulk(ctx, meta, s, meta.SingleID())
+		return em.runBulk(ctx, meta, s, i.returnedID())
 	}
 	n := 0
 	var events []*EventArgs
@@ -429,7 +457,7 @@ func (i *Insert) Exec(ctx context.Context) (int, error) {
 			if err != nil {
 				return err
 			}
-			c, args, err := em.writeBulk(ctx, meta, s, meta.SingleID())
+			c, args, err := em.writeBulk(ctx, meta, s, i.returnedID())
 			if err != nil {
 				return err
 			}

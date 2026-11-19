@@ -104,9 +104,12 @@ they write; on any other, building the statement fails with an error (no SQL is 
 | Feature | Postgres | SQLite | MySQL / MariaDB | SQL Server |
 |---|---|---|---|---|
 | `UpdateQuery.From` (`UPDATE … FROM`) | yes | yes | no | no |
-| `tenet.Insert[T]` (bulk inserts, upserts) | yes | yes | no | no |
+| `tenet.Insert[T]` (bulk inserts, upserts) | yes | yes | yes¹ | no |
 | `JoinLateral`, `LeftJoinLateral` | yes | no | no | no |
 | IDs in `EventPostBulk` (`RETURNING`) | yes | yes | nil (any row may have changed) | nil |
+
+¹ A conflict is any unique key (the `OnConflict` fields are not checked); MySQL
+counts an updated row twice in the result of `Exec`.
 
 ## Documentation
 

@@ -65,7 +65,8 @@ type Selection interface{ ormQuery() *orm.Query }
 //
 // It bypasses the unit of work: the entities are not managed afterwards and
 // hooks do not run; IDs and timestamps are assigned as on a flush.
-// Listeners get EventPostBulk with the IDs written. Postgres and SQLite only.
+// Listeners get EventPostBulk with the IDs written. Not on SQL Server; on
+// MySQL and MariaDB any unique key is a conflict (see orm.Insert).
 func Insert[T any](em *EntityManager) *InsertQuery[T] {
 	return &InsertQuery[T]{i: em.NewInsert(reflect.TypeFor[T]())}
 }
