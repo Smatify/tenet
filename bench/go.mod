@@ -2,7 +2,6 @@ module github.com/smatify/tenet/bench
 
 go 1.26.0
 
-
 replace (
 	github.com/smatify/tenet => ../
 	github.com/smatify/tenet/dialect/pgdialect => ../dialect/pgdialect
@@ -11,7 +10,7 @@ replace (
 require (
 	entgo.io/ent v0.14.6
 	github.com/jackc/pgx/v5 v5.11.0
-	github.com/smatify/tenet v0.1.0
+	github.com/smatify/tenet v0.2.0
 	github.com/smatify/tenet/dialect/pgdialect v0.1.0
 	github.com/testcontainers/testcontainers-go v0.44.0
 	github.com/testcontainers/testcontainers-go/modules/postgres v0.44.0
