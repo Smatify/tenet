@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v0.2.0 (2026-11-19)
 
 - `unique:` on the entity header declares unique indexes over several fields
   or to-one associations, with the groups, orders and predicates of `index:`
