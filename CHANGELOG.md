@@ -5,6 +5,9 @@
 - `unique:` on the entity header declares unique indexes over several fields
   or to-one associations, with the groups, orders and predicates of `index:`
   (`unique:campaign|user`).
+- A loaded row whose identifier is the zero value (e.g. a user with ID 0) is
+  written as that value when another entity references it; it was written
+  as NULL.
 
 ## gen v0.1.1 (2026-11-07)
 

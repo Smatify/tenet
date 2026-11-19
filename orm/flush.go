@@ -34,7 +34,9 @@ func (em *EntityManager) fieldDBValue(e *entry, f *mapping.Field) (any, error) {
 		tm := f.Assoc.Target
 		ref := tm.FieldByColumn(f.Assoc.JoinColumns[0].Referenced)
 		v := tm.Accessor().Get(target, ref.Pos)
-		if isZeroID(v) {
+		// A zero value means "not stored yet" only for targets this manager
+		// has no identity for; a loaded row may well have the ID 0.
+		if isZeroID(v) && !em.hasIdentity(tm, target) {
 			return nil, nil
 		}
 		return ref.Type.ToDatabase(v, d)

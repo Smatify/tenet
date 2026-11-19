@@ -98,6 +98,14 @@ func (em *EntityManager) entryOf(meta *mapping.Entity, ptr any) *entry {
 	return nil
 }
 
+// hasIdentity reports whether this manager knows the identifier of ptr:
+// it loaded the row or registered it after inserting, so even a zero
+// identifier is the stored value.
+func (em *EntityManager) hasIdentity(meta *mapping.Entity, ptr any) bool {
+	e := em.entryOf(meta, ptr)
+	return e != nil && e.key != nil
+}
+
 func (em *EntityManager) attach(meta *mapping.Entity, ptr any, state State) *entry {
 	e := &entry{em: weak.Make(em), meta: meta, ptr: ptr, state: state, initialized: true}
 	entity.SetState(meta.Accessor().Header(ptr), e)
